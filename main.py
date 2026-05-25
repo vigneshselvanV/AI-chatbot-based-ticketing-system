@@ -145,7 +145,7 @@ async def get_ai_response(prompt: str, system_prompt: str, json_mode: bool = Fal
             "X-Title": "TicketBot"
         }
         payload = {
-            "model": "openai/gpt-oss-120b:free",
+            "model": "google/gemma-2-9b-it:free",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
