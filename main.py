@@ -156,30 +156,34 @@ async def get_ai_response(prompt: str, system_prompt: str, json_mode: bool = Fal
 
         async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
+            if response.status_code != 200:
+                raise Exception(f"OpenRouter HTTP {response.status_code}: {response.text}")
             data = response.json()
             return data["choices"][0]["message"]["content"]
 
     except Exception as e:
-        print(f"OpenRouter failed ({e}). Falling back to local Ollama...")
-        url = "http://localhost:11434/api/generate"
-        payload = {
-            "model": "qwen2.5:3b",
-            "prompt": prompt,
-            "system": system_prompt,
-            "stream": False,
-        }
-        if json_mode:
-            payload["format"] = "json"
+        print(f"OpenRouter failed: {e}")
+        # Try local Ollama fallback ONLY if we are running locally
+        if "render" not in os.getenv("RENDER_EXTERNAL_URL", ""):
+            print("Falling back to local Ollama...")
+            url = "http://localhost:11434/api/generate"
+            payload = {
+                "model": "qwen2.5:3b",
+                "prompt": prompt,
+                "system": system_prompt,
+                "stream": False,
+            }
+            if json_mode:
+                payload["format"] = "json"
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            try:
-                response = await client.post(url, json=payload)
-                response.raise_for_status()
-                return response.json().get("response", "")
-            except Exception as e2:
-                print(f"Local Ollama also failed: {e2}")
-                raise HTTPException(status_code=500, detail="Failed to get LLM response.")
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                try:
+                    response = await client.post(url, json=payload)
+                    response.raise_for_status()
+                    return response.json().get("response", "")
+                except Exception as e2:
+                    print(f"Local Ollama also failed: {e2}")
+        raise Exception(f"AI Service Error: {str(e)}")
 
 # ═══════════════════════════════════════════
 # /search Endpoint — Smart Conversational Router
@@ -234,7 +238,7 @@ async def search_tickets(request: SearchRequest):
         print(f"Parsed intent: {intent}")
     except Exception as e:
         print(f"Intent extraction failed: {e}")
-        return {"type": "chat", "message": "Sorry, I couldn't understand your request. Both AI services are currently unavailable."}
+        return {"type": "chat", "message": f"Sorry, I couldn't understand your request. Error details: {str(e)}"}
 
     # ── STEP 2: Smart Follow-Up — Ask for missing details ──
     source_raw = intent.get("source") or intent.get("origin")
