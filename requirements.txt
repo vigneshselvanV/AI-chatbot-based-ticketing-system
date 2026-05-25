@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+httpx
+playwright
+playwright-stealth
+pydantic
+python-dotenv

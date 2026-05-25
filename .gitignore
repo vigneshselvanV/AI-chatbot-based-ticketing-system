@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Debug / Temporary Scraper Outputs
+debug_*.png
+debug_*.html
+debug_*.txt
+captured_apis.json
+ixigo_flight.html
+
+# Node / Frontend (covered by frontend/.gitignore but added here for safety)
+**/node_modules/
+**/dist/
+frontend/dist/
+frontend/node_modules/
+.DS_Store
+Thumbs.db
