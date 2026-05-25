@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Plane, Bus, Train, Calendar, MapPin, Loader2, ExternalLink, Clock, Star, IndianRupee, ArrowRight, Sparkles, ChevronDown, ChevronUp, LogOut } from 'lucide-react';
+import { Send, Bot, User, Plane, Bus, Train, Calendar, MapPin, Loader2, ExternalLink, Clock, Star, ArrowRight, Sparkles, ChevronDown, ChevronUp, LogOut } from 'lucide-react';
 import './index.css';
 import { AuthModal } from './components/AuthModal';
 import type { User as AuthUser } from './components/AuthModal';
