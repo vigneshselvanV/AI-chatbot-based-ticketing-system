@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Plane, Bus, Train, Calendar, MapPin, Loader2, ExternalLink, Clock, Star, ArrowRight, Sparkles, ChevronDown, ChevronUp, LogOut } from 'lucide-react';
+import { Send, Bot, User, Plane, Bus, Train, Calendar, MapPin, Loader2, ExternalLink, Clock, Star, ArrowRight, Sparkles, ChevronDown, ChevronUp, LogOut, Bookmark, Menu, Plus, MessageSquare } from 'lucide-react';
 import './index.css';
 import { AuthModal } from './components/AuthModal';
 import type { User as AuthUser } from './components/AuthModal';
@@ -9,6 +9,13 @@ interface Message {
   type: 'user' | 'bot';
   text: string;
   isMarkdown?: boolean;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  updatedAt: number;
 }
 
 interface IntentData {
@@ -29,16 +36,19 @@ interface SearchSummary {
   destination: string;
   date: string;
   total_results: number;
+  ai_recommendation?: string;
 }
 
+const initialMessages: Message[] = [
+  {
+    id: 'init', type: 'bot',
+    text: '👋 Hello! I\'m your AI travel assistant.\n\nI can help you find live tickets for:\n🚌 **Buses** — from RedBus\n✈️ **Flights** — from Google Flights\n🚆 **Trains** — from MakeMyTrip\n\nJust type something like:\n*"Check bus for Coimbatore to Rameswaram"*',
+    isMarkdown: true
+  }
+];
+
 function App() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'init', type: 'bot',
-      text: '👋 Hello! I\'m your AI travel assistant.\n\nI can help you find live tickets for:\n🚌 **Buses** — from RedBus\n✈️ **Flights** — from Google Flights\n🚆 **Trains** — from MakeMyTrip\n\nJust type something like:\n*"Check bus for Coimbatore to Rameswaram"*',
-      isMarkdown: true
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tickets, setTickets] = useState<TicketResult[]>([]);
@@ -48,7 +58,8 @@ function App() {
   const [searchSummary, setSearchSummary] = useState<SearchSummary | null>(null);
   const [expandedTicket, setExpandedTicket] = useState<number | null>(null);
   const [conversationContext, setConversationContext] = useState<Record<string, string | null>>({});
-  const [activeTab, setActiveTab] = useState<'all' | 'flight' | 'train' | 'bus'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'flight' | 'train' | 'bus' | 'saved'>('all');
+  const [savedTickets, setSavedTickets] = useState<TicketResult[]>([]);
   const [suggestedQueries, setSuggestedQueries] = useState<string[]>([
     "Bus from Chennai to Madurai tomorrow",
     "Flights from Delhi to Mumbai",
@@ -57,7 +68,39 @@ function App() {
 
   // Auth State
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Sidebar & History State
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+
+  const handleNewChat = () => {
+    const id = Date.now().toString();
+    const newSession: ChatSession = { id, title: 'New Chat', messages: initialMessages, updatedAt: Date.now() };
+    setChatSessions(prev => [newSession, ...prev]);
+    setCurrentSessionId(id);
+    setMessages(initialMessages);
+    setTickets([]);
+    setIntent(null);
+    setSearchSummary(null);
+    setConversationContext({});
+    if (window.innerWidth < 900) setIsSidebarOpen(false);
+  };
+
+  const loadSession = (id: string) => {
+    const session = chatSessions.find(s => s.id === id);
+    if (session) {
+      setCurrentSessionId(id);
+      setMessages(session.messages);
+      setTickets([]);
+      setIntent(null);
+      setSearchSummary(null);
+      setConversationContext({});
+      if (window.innerWidth < 900) setIsSidebarOpen(false);
+    }
+  };
 
   useEffect(() => {
     // Check local storage for existing session
@@ -69,7 +112,67 @@ function App() {
         console.error("Error parsing user from localStorage", e);
       }
     }
+    
+    setIsCheckingAuth(false);
+
+    const savedSessions = localStorage.getItem('travel_ai_sessions');
+    if (savedSessions) {
+      try {
+        const parsed = JSON.parse(savedSessions);
+        setChatSessions(parsed);
+        if (parsed.length > 0) {
+          setCurrentSessionId(parsed[0].id);
+          setMessages(parsed[0].messages);
+        } else {
+          handleNewChat();
+        }
+      } catch (e) { handleNewChat(); }
+    } else {
+      const savedMessages = localStorage.getItem('travel_ai_messages');
+      if (savedMessages) {
+        try { 
+          const parsed = JSON.parse(savedMessages);
+          const newSession = { id: Date.now().toString(), title: 'Legacy Chat', messages: parsed, updatedAt: Date.now() };
+          setChatSessions([newSession]);
+          setCurrentSessionId(newSession.id);
+          setMessages(parsed);
+        } catch (e) { handleNewChat(); }
+      } else {
+        handleNewChat();
+      }
+    }
+
+    const savedTks = localStorage.getItem('travel_ai_saved_tickets');
+    if (savedTks) {
+      try { setSavedTickets(JSON.parse(savedTks)); } catch (e) {}
+    }
   }, []);
+
+  useEffect(() => {
+    if (currentSessionId && messages.length > 0) {
+      setChatSessions(prev => prev.map(session => {
+        if (session.id === currentSessionId) {
+           let title = session.title;
+           if (title === 'New Chat' && messages.length > 1) {
+             const firstUserMsg = messages.find(m => m.type === 'user');
+             if (firstUserMsg) title = firstUserMsg.text.slice(0, 25) + '...';
+           }
+           return { ...session, title, messages, updatedAt: Date.now() };
+        }
+        return session;
+      }));
+    }
+  }, [messages, currentSessionId]);
+
+  useEffect(() => {
+    if (chatSessions.length > 0) {
+      localStorage.setItem('travel_ai_sessions', JSON.stringify(chatSessions));
+    }
+  }, [chatSessions]);
+
+  useEffect(() => {
+    localStorage.setItem('travel_ai_saved_tickets', JSON.stringify(savedTickets));
+  }, [savedTickets]);
 
   const handleLogout = () => {
     setUser(null);
@@ -107,7 +210,7 @@ function App() {
       const res = await fetch(`${apiBase}/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: queryText, context: conversationContext })
+        body: JSON.stringify({ query: queryText, context: conversationContext, history: messages.slice(-6) })
       });
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -302,15 +405,78 @@ function App() {
     return { cheapest, fastest };
   }, [tickets, intent]);
 
-  const filteredTickets = tickets.filter(ticket => {
+  const toggleSaveTicket = (ticket: TicketResult) => {
+    const isSaved = savedTickets.some(t => t.price === ticket.price && t.departure === ticket.departure && t.operator === ticket.operator);
+    if (isSaved) {
+      setSavedTickets(savedTickets.filter(t => !(t.price === ticket.price && t.departure === ticket.departure && t.operator === ticket.operator)));
+    } else {
+      setSavedTickets([...savedTickets, ticket]);
+    }
+  };
+
+  const filteredTickets = activeTab === 'saved' ? savedTickets : tickets.filter(ticket => {
     if (activeTab === 'all') return true;
     const ticketMode = ticket.mode || intent?.mode || 'bus';
     return ticketMode === activeTab;
   });
 
-  const hasResults = tickets.length > 0;
+  const hasResults = tickets.length > 0 || savedTickets.length > 0;
   const intentSource = intent?.source || intent?.origin || null;
   const modeColor = getModeColor(intent?.mode);
+
+  if (isCheckingAuth) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: '#f9fafb' }}>
+        <Loader2 className="animate-spin" size={40} color="#4f46e5" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        <header className="header" style={{ position: 'relative', zIndex: 10 }}>
+          <div className="header-left">
+            <Bot className="header-icon" size={28} />
+            <h1>AI Travel Assistant</h1>
+          </div>
+          <div className="header-right" style={{ marginLeft: 'auto' }}>
+            <button onClick={() => setShowAuthModal(true)} className="login-btn">
+              <User size={16} />
+              <span>Sign In</span>
+            </button>
+          </div>
+        </header>
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(124, 58, 237, 0.05) 100%)', padding: '20px', textAlign: 'center' }}>
+          <div style={{ background: 'white', padding: '40px', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.05)', maxWidth: '500px', width: '100%' }}>
+            <Bot size={64} color="#4f46e5" style={{ margin: '0 auto 20px auto' }} />
+            <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#1f2937', marginBottom: '16px' }}>Welcome to AI Travel Assistant</h2>
+            <p style={{ fontSize: '16px', color: '#6b7280', marginBottom: '32px', lineHeight: 1.5 }}>
+              Sign in to start chatting with your personal AI travel agent. Discover the best routes, cheapest flights, and fastest trains across India.
+            </p>
+            <button 
+              onClick={() => setShowAuthModal(true)}
+              className="send-button"
+              style={{ width: '100%', padding: '16px', fontSize: '16px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', borderRadius: '12px' }}
+            >
+              <Sparkles size={20} />
+              Get Started Now
+            </button>
+          </div>
+        </div>
+
+        <AuthModal 
+          isOpen={showAuthModal} 
+          onClose={() => setShowAuthModal(false)} 
+          onLogin={(newUser) => {
+            setUser(newUser);
+            setShowAuthModal(false);
+          }} 
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -323,9 +489,80 @@ function App() {
         }} 
       />
 
+      {/* Sidebar Overlay */}
+      <div 
+        className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
+
+      {/* Sidebar */}
+      <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+            <Bot size={24} color="#a5b4fc" /> TicketBot
+          </h2>
+        </div>
+        <div className="sidebar-content">
+          <button className="sidebar-btn new-chat-btn" onClick={handleNewChat}>
+            <Plus size={18} /> New Search
+          </button>
+          <button 
+            className={`sidebar-btn ${activeTab === 'saved' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('saved');
+              setIntent(null);
+              setTickets([]);
+              if (window.innerWidth < 900) setIsSidebarOpen(false);
+            }}
+          >
+            <Bookmark size={18} fill={activeTab === 'saved' ? "currentColor" : "none"} /> Saved Tickets ({savedTickets.length})
+          </button>
+
+          <div style={{ marginTop: '1rem' }}>
+            <h3 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>History</h3>
+            <div className="history-list">
+              {chatSessions.map(session => (
+                <div 
+                  key={session.id} 
+                  className={`history-item ${session.id === currentSessionId ? 'active' : ''}`}
+                  onClick={() => loadSession(session.id)}
+                >
+                  <MessageSquare size={14} />
+                  {session.title}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="sidebar-footer">
+          {user && (
+            <div className="user-settings">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(to right, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 'bold', color: 'white' }}>
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'white', lineHeight: 1 }}>{user.name}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>Traveler</span>
+                </div>
+              </div>
+              <button onClick={handleLogout} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }} title="Log out">
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Header */}
       <header className="header">
         <div className="header-left">
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', marginRight: '12px' }}
+          >
+            <Menu size={24} />
+          </button>
           <Bot className="header-icon" size={28} />
           <h1>AI Travel Assistant</h1>
         </div>
@@ -339,30 +576,6 @@ function App() {
               <Calendar size={14} />
               <span>{searchSummary.date}</span>
             </div>
-          )}
-          
-          {user ? (
-            <div className="user-profile">
-              <div style={{ width: '24px', height: '24px', borderRadius: '9999px', background: 'linear-gradient(to right, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold', color: 'white' }}>
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-              <span style={{ fontSize: '0.875rem', fontWeight: '500', color: 'rgba(255,255,255,0.9)' }}>{user.name}</span>
-              <button 
-                onClick={handleLogout}
-                title="Sign Out"
-                style={{ marginLeft: '8px' }}
-              >
-                <LogOut size={16} />
-              </button>
-            </div>
-          ) : (
-            <button 
-              onClick={() => setShowAuthModal(true)}
-              className="login-btn"
-            >
-              <User size={16} />
-              <span>Sign In</span>
-            </button>
           )}
         </div>
       </header>
@@ -453,6 +666,7 @@ function App() {
                 <p className="results-subtitle">
                   {intent?.mode === 'all' ? `${tickets.length} options comparing Flights, Trains & Buses` : `${tickets.length} results from `}
                   {intent?.mode !== 'all' && <span className="source-label">{dataSource}</span>}
+                  {activeTab === 'saved' && <span> (Showing Saved Tickets)</span>}
                 </p>
               </div>
               {bookingUrl && intent?.mode !== 'all' && (
@@ -532,8 +746,21 @@ function App() {
               </div>
             )}
 
+            {/* AI Recommendation Box */}
+            {searchSummary?.ai_recommendation && intent?.mode === 'all' && (
+              <div className="ai-recommendation-box" style={{ background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)', padding: '20px', borderRadius: '16px', marginBottom: '24px', border: '1px solid rgba(124, 58, 237, 0.2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <Bot size={20} color="#7c3aed" />
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#a5b4fc', margin: 0 }}>AI Recommendation</h3>
+                </div>
+                <p style={{ fontSize: '0.95rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.6, margin: 0 }}>
+                  {renderText(searchSummary.ai_recommendation)}
+                </p>
+              </div>
+            )}
+
             {/* Filter Tabs */}
-            {intent?.mode === 'all' && (
+            {(intent?.mode === 'all' || savedTickets.length > 0) && (
               <div className="filter-tabs">
                 <button
                   className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
@@ -562,10 +789,65 @@ function App() {
                 >
                   🚌 Buses ({tickets.filter(t => t.mode === 'bus').length})
                 </button>
+                {savedTickets.length > 0 && (
+                  <button
+                    className={`tab-btn ${activeTab === 'saved' ? 'active' : ''}`}
+                    onClick={() => { setActiveTab('saved'); setExpandedTicket(null); }}
+                  >
+                    🔖 Saved ({savedTickets.length})
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Ticket Cards */}
+            {/* Content Switch: Table View for 'All' vs Card View for individual modes */}
+            {activeTab === 'all' && intent?.mode === 'all' ? (
+              <div className="modern-table-container">
+                <table className="modern-table">
+                  <thead>
+                    <tr>
+                      <th>Mode</th>
+                      <th>Operator / Details</th>
+                      <th>Departure</th>
+                      <th>Duration</th>
+                      <th>Arrival</th>
+                      <th>Price</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTickets.map((ticket, idx) => {
+                      const ticketMode = ticket.mode || 'bus';
+                      const ticketColor = getModeColor(ticketMode);
+                      return (
+                        <tr key={idx}>
+                          <td>
+                            <div className="table-mode-tag" style={{ background: `${ticketColor}20`, color: ticketColor }}>
+                              {getModeIcon(ticketMode)} {ticketMode.toUpperCase()}
+                            </div>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.95)' }}>{getTicketLabel(ticket)}</div>
+                            <div style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.5)' }}>{getTicketSubLabel(ticket)}</div>
+                          </td>
+                          <td style={{ fontWeight: 500, color: 'rgba(255, 255, 255, 0.85)' }}>{getTicketDeparture(ticket)}</td>
+                          <td style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}><Clock size={12} style={{ display: 'inline', marginRight: '4px' }}/>{getTicketDuration(ticket)}</td>
+                          <td style={{ fontWeight: 500, color: 'rgba(255, 255, 255, 0.85)' }}>{getTicketArrival(ticket)}</td>
+                          <td>
+                            <div style={{ fontWeight: 700, color: ticketColor, fontSize: '1.05rem' }}>{getTicketPrice(ticket)}</div>
+                          </td>
+                          <td>
+                            <a href={ticket.booking_url || bookingUrl || '#'} target="_blank" rel="noopener noreferrer" className="table-book-btn" style={{ background: ticketColor }}>
+                              Book <ExternalLink size={12} style={{ marginLeft: '4px' }} />
+                            </a>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
             <div className="ticket-cards">
               {filteredTickets.map((ticket, idx) => {
                 const isExpanded = expandedTicket === idx;
@@ -579,6 +861,7 @@ function App() {
                 const ticketMode = ticket.mode || intent?.mode || 'bus';
                 const ticketColor = getModeColor(ticketMode);
                 const ticketSource = ticketMode === 'flight' ? 'Google Flights' : ticketMode === 'train' ? 'RedBus RedRail' : 'RedBus';
+                const isSaved = savedTickets.some(t => t.price === ticket.price && t.departure === ticket.departure && t.operator === ticket.operator);
 
                 return (
                   <div
@@ -598,9 +881,22 @@ function App() {
                           {subLabel && <span className="operator-type">{subLabel}</span>}
                         </div>
                       </div>
-                      <div className="card-price">
-                        <span className="price-value">{price}</span>
-                        <span className="price-label">per person</span>
+                      <div className="card-price" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <div>
+                          <span className="price-value">{price}</span>
+                          <span className="price-label">per person</span>
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSaveTicket(ticket);
+                          }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: isSaved ? ticketColor : '#9ca3af', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 500 }}
+                          title={isSaved ? "Remove saved ticket" : "Save ticket"}
+                        >
+                          <Bookmark size={14} fill={isSaved ? ticketColor : "none"} />
+                          {isSaved ? "Saved" : "Save"}
+                        </button>
                       </div>
                     </div>
 
@@ -703,6 +999,7 @@ function App() {
                 );
               })}
             </div>
+            )}
           </section>
         )}
       </main>

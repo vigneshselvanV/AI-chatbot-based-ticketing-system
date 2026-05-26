@@ -33,6 +33,7 @@ app.add_middleware(
 class SearchRequest(BaseModel):
     query: str
     context: dict | None = None  # For follow-up conversations
+    history: list | None = None
 
 # ═══════════════════════════════════════════
 # City Sanitizer
@@ -124,19 +125,27 @@ def generate_booking_url(mode: str, source: str, destination: str, date: str, ti
 def extract_json_from_text(raw_text: str) -> dict:
     if not raw_text:
         return {}
+    # Remove thinking tags
+    raw_text = re.sub(r'<think>.*?</think>', '', raw_text, flags=re.DOTALL)
     try:
-        match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        # First try to find a markdown json block
+        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_text, re.DOTALL)
         if match:
-            return json.loads(match.group(0))
-        else:
-            return {}
-    except (json.JSONDecodeError, Exception):
+            return json.loads(match.group(1))
+        # Then try to just find the first { and last }
+        start = raw_text.find('{')
+        end = raw_text.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            return json.loads(raw_text[start:end+1])
+        return {}
+    except (json.JSONDecodeError, Exception) as e:
+        print("JSON parse error:", e)
         return {}
 
 # ═══════════════════════════════════════════
 # LLM Integration (OpenRouter → Ollama fallback)
 # ═══════════════════════════════════════════
-async def get_ai_response(prompt: str, system_prompt: str, json_mode: bool = False) -> str:
+async def get_ai_response(prompt: str, system_prompt: str, json_mode: bool = False, history: list = None) -> str:
     try:
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
@@ -144,21 +153,27 @@ async def get_ai_response(prompt: str, system_prompt: str, json_mode: bool = Fal
             "HTTP-Referer": "http://localhost:3000",
             "X-Title": "TicketBot"
         }
+        
+        messages = [{"role": "system", "content": system_prompt}]
+        if history:
+            for msg in history[-8:]:
+                role = "user" if msg.get("type") == "user" else "assistant"
+                messages.append({"role": role, "content": msg.get("text", "")})
+        messages.append({"role": "user", "content": prompt})
+
         payload = {
-            "model": "google/gemma-2-9b-it:free",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ]
+            "model": "openai/gpt-oss-120b:free",
+            "messages": messages
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
         async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.post(url, headers=headers, json=payload)
-            if response.status_code != 200:
-                raise Exception(f"OpenRouter HTTP {response.status_code}: {response.text}")
-            data = response.json()
+            data = response.json() if response.text else {}
+            if response.status_code != 200 or "choices" not in data:
+                error_msg = data.get("error", {}).get("message", response.text)
+                raise Exception(f"OpenRouter HTTP {response.status_code}: {error_msg}")
             return data["choices"][0]["message"]["content"]
 
     except Exception as e:
@@ -198,16 +213,21 @@ async def search_tickets(request: SearchRequest):
 
     # ── STEP 1: Intent Extraction ──
     system_intent = (
-        'You are an intent parser. Extract travel info into EXACTLY this JSON format: '
-        '{"mode": "bus|train|flight|all", "source": "City", "destination": "City", "date": "DD-MM-YYYY"}. '
-        'Output ABSOLUTELY NOTHING ELSE. No markdown, no backticks, no greetings. '
+        'You are a STRICT intent extraction API. You MUST output ONLY valid JSON. '
+        'Do NOT answer the user\'s question. Do NOT provide travel options. Do NOT chat. '
+        'Extract the travel info into EXACTLY this JSON format: '
+        '{"mode": "bus|train|flight|all", "source": "City", "destination": "City", "date": "DD-MM-YYYY", "preference": "cheapest|ac|seater|sleeper|null"}. '
         'Rules: '
         '- bus/coach/travels → mode is "bus". '
         '- train/express/railway → mode is "train". '
         '- flight/fly/plane/air → mode is "flight". '
         '- compare/comparison/all/every mode/cheapest way/best way/options → mode is "all". '
+        '- cheapest/lowest price/budget/low price → preference is "cheapest". '
+        '- ac/air conditioned → preference is "ac". '
+        '- seater/seat → preference is "seater". '
+        '- sleeper/berth → preference is "sleeper". '
         '- If the user just says "travel" or "ticket" or "go to" without specifying a mode, set mode to "all". '
-        '- If no source/destination found → return {"mode": null, "source": null, "destination": null, "date": null}. '
+        '- If no source/destination found → return {"mode": null, "source": null, "destination": null, "date": null, "preference": null}. '
         '- If date is missing, set date to null (do NOT guess a date). '
         f'- Convert relative dates: today={today}, tomorrow={tomorrow}. '
         '- "next week" means 7 days from today. '
@@ -217,6 +237,19 @@ async def search_tickets(request: SearchRequest):
     # Merge context from follow-up conversation
     context = request.context or {}
     merged_query = request.query
+
+    history_str = ""
+    if request.history:
+        history_msgs = []
+        for msg in request.history[-6:]:
+            role = "User" if msg.get("type") == "user" else "Assistant"
+            text = msg.get("text", "")
+            if len(text) > 300:
+                text = text[:300] + "... [truncated]"
+            history_msgs.append(f"{role}: {text}")
+        if history_msgs:
+            history_str = "Recent Conversation History (For Context ONLY. DO NOT REPLY TO THIS):\n" + "\n".join(history_msgs) + "\n\n"
+            merged_query = history_str + "NOW, extract the intent from this Latest User Message: " + request.query
 
     # If we have prior context (from a follow-up), merge it
     if context.get("source") or context.get("destination"):
@@ -229,7 +262,10 @@ async def search_tickets(request: SearchRequest):
             ctx_parts.append(f"to: {context['destination']}")
         if context.get("date"):
             ctx_parts.append(f"on: {context['date']}")
-        merged_query = f"Previously mentioned: {', '.join(ctx_parts)}. User now says: {request.query}"
+        if not history_str:
+            merged_query = f"Previously mentioned: {', '.join(ctx_parts)}. User now says: {request.query}"
+        else:
+            merged_query += f"\nPreviously extracted intent: {', '.join(ctx_parts)}"
         print(f"Merged query: {merged_query}")
 
     try:
@@ -304,16 +340,14 @@ async def search_tickets(request: SearchRequest):
     # ── STEP 3: No travel intent at all → chat ──
     if not source_raw or not destination_raw:
         system_chat = (
-            "You are a friendly travel assistant chatbot. "
-            "Help users search for bus, train, and flight tickets across India. "
-            "If the user greets you, greet them back warmly and give examples of what they can ask. "
-            "Examples: 'Find me a bus from Chennai to Madurai tomorrow', "
-            "'Show flights from Delhi to Mumbai on 15 June 2026', "
-            "'Check trains from Coimbatore to Rameswaram'. "
-            "Keep responses concise and helpful."
+            "You are a friendly, conversational travel assistant chatbot for India. "
+            "Engage in natural conversation and answer the user's questions directly. "
+            "If they ask about you, explain that you are an AI travel assistant. "
+            "If they greet you, greet them back warmly. "
+            "Keep responses concise, helpful, and natural, gently guiding them back to booking tickets if appropriate."
         )
         try:
-            chat_msg = await get_ai_response(request.query, system_chat)
+            chat_msg = await get_ai_response(request.query, system_chat, history=request.history)
             return {"type": "chat", "message": chat_msg}
         except Exception:
             return {
@@ -398,7 +432,20 @@ async def search_tickets(request: SearchRequest):
                 t["mode"] = "train"
                 results.append(t)
 
+        # ── STEP 6.5: Apply Preferences ──
+        preference = intent.get("preference")
+        if preference == "ac":
+            results = [r for r in results if "ac" in str(r.get("type", "")).lower() or "ac" in str(r.get("coach", "")).lower() or "ac" in str(r.get("seats", "")).lower()]
+        elif preference == "seater":
+            results = [r for r in results if "seat" in str(r.get("type", "")).lower() or "seater" in str(r.get("type", "")).lower()]
+        elif preference == "sleeper":
+            results = [r for r in results if "sleep" in str(r.get("type", "")).lower() or "sleeper" in str(r.get("type", "")).lower()]
+        
+        if preference == "cheapest":
+            results.sort(key=lambda x: parse_price(x.get("price")))
+
         # ── STEP 7: Enrich results with booking URLs and extra details ──
+        ai_recommendation = ""
         if mode == "all":
             flight_booking_url = generate_booking_url("flight", source_raw, destination_raw, date, {})
             bus_booking_url = generate_booking_url("bus", source_raw, destination_raw, date, {})
@@ -417,6 +464,25 @@ async def search_tickets(request: SearchRequest):
             results.sort(key=lambda x: parse_price(x.get("price")))
             booking_base_url = ""
             data_source = "All Modes"
+
+            # Generate AI Recommendation
+            try:
+                top_results = "\n".join([
+                    f"- {t.get('mode', '').title()}: {t.get('operator', t.get('airline', t.get('train', 'Unknown')))} | Price: {t.get('price')} | Duration: {t.get('duration')} | Departs: {t.get('departure')}"
+                    for t in results[:8]
+                ])
+                prompt = (
+                    f"You are a travel expert analyzing tickets from {source_raw} to {destination_raw}.\n"
+                    f"Here are the top options sorted by price:\n{top_results}\n\n"
+                    f"Provide a brief, helpful recommendation (2-3 sentences). "
+                    f"Highlight the best and worst transport sectors based on price vs duration, and give your final recommendation."
+                )
+                sys_prompt = "You are an expert AI Travel agent. Keep recommendations concise and use emojis. Do not output JSON."
+                ai_recommendation = await get_ai_response(prompt, sys_prompt)
+            except Exception as e:
+                print(f"AI Recommendation failed: {e}")
+                ai_recommendation = "Our AI couldn't generate a custom recommendation right now, but you can explore the options below!"
+
         else:
             booking_base_url = generate_booking_url(mode, source_raw, destination_raw, date, {})
             for ticket in results:
@@ -441,6 +507,7 @@ async def search_tickets(request: SearchRequest):
                 "destination": destination_raw.title() if destination_raw else "",
                 "date": date,
                 "total_results": len(results),
+                "ai_recommendation": ai_recommendation
             }
         }
 
