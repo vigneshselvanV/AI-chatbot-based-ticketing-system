@@ -3,6 +3,7 @@ import sys
 import io
 import json
 import re
+import os
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
 
@@ -125,14 +126,29 @@ def parse_date(date_str: str):
 # ═══════════════════════════════════════════
 async def _create_stealth_page(playwright):
     """Launches a Chromium browser with stealth and returns (browser, page)."""
-    browser = await playwright.chromium.launch(
-        headless=True,
-        args=[
+    proxy_server = os.getenv("PROXY_SERVER")
+    proxy_username = os.getenv("PROXY_USERNAME")
+    proxy_password = os.getenv("PROXY_PASSWORD")
+
+    launch_args = {
+        "headless": True,
+        "args": [
             '--disable-blink-features=AutomationControlled',
             '--disable-infobars',
             '--window-size=1920,1080'
         ]
-    )
+    }
+
+    if proxy_server:
+        launch_args["proxy"] = {
+            "server": proxy_server,
+        }
+        if proxy_username and proxy_password:
+            launch_args["proxy"]["username"] = proxy_username
+            launch_args["proxy"]["password"] = proxy_password
+        print(f"[SCRAPER] Launching with proxy: {proxy_server}")
+
+    browser = await playwright.chromium.launch(**launch_args)
     context = await browser.new_context(
         user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         viewport={'width': 1920, 'height': 1080},
