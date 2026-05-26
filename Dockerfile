@@ -10,6 +10,9 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Explicitly install Playwright chromium browser to ensure no version mismatch
+RUN playwright install chromium
+
 # Copy the rest of the application
 COPY . .
 
