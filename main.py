@@ -162,7 +162,7 @@ async def get_ai_response(prompt: str, system_prompt: str, json_mode: bool = Fal
         messages.append({"role": "user", "content": prompt})
 
         payload = {
-            "model": "google/gemma-2-9b-it:free",
+            "model": "openai/gpt-oss-120b:free",
             "messages": messages
         }
         if json_mode:
