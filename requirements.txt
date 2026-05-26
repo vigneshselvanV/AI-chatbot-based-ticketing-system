@@ -5,3 +5,5 @@ playwright
 playwright-stealth
 pydantic
 python-dotenv
+beautifulsoup4
+lxml
