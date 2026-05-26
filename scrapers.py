@@ -126,10 +126,8 @@ def parse_date(date_str: str):
 # ═══════════════════════════════════════════
 async def _create_stealth_page(playwright):
     """Launches a Chromium browser with stealth and returns (browser, page)."""
-    proxy_server = os.getenv("PROXY_SERVER")
-    proxy_username = os.getenv("PROXY_USERNAME")
-    proxy_password = os.getenv("PROXY_PASSWORD")
-
+    scraperapi_key = os.getenv("SCRAPERAPI_KEY", "01ac6fb3a652d4473de473ec4bf256f0")
+    
     launch_args = {
         "headless": True,
         "args": [
@@ -139,14 +137,14 @@ async def _create_stealth_page(playwright):
         ]
     }
 
-    if proxy_server:
+    if scraperapi_key:
+        # ScraperAPI Proxy Mode configuration
         launch_args["proxy"] = {
-            "server": proxy_server,
+            "server": "http://proxy-server.scraperapi.com:8001",
+            "username": "scraperapi",
+            "password": scraperapi_key
         }
-        if proxy_username and proxy_password:
-            launch_args["proxy"]["username"] = proxy_username
-            launch_args["proxy"]["password"] = proxy_password
-        print(f"[SCRAPER] Launching with proxy: {proxy_server}")
+        print("[SCRAPER] Launching Playwright routed through ScraperAPI Proxy...")
 
     browser = await playwright.chromium.launch(**launch_args)
     context = await browser.new_context(
