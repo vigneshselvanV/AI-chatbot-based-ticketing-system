@@ -126,7 +126,7 @@ def parse_date(date_str: str):
 async def _create_stealth_page(playwright):
     """Launches a Chromium browser with stealth and returns (browser, page)."""
     browser = await playwright.chromium.launch(
-        headless=False,
+        headless=True,
         args=[
             '--disable-blink-features=AutomationControlled',
             '--disable-infobars',
