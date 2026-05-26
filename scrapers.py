@@ -354,147 +354,116 @@ async def scrape_bus(source: str, destination: str, date: str) -> list:
 
 
 # ═══════════════════════════════════════════════════════════════
-# SCRAPER B: Flight (Google Flights) — Confirmed Working
-#   Google Flights text output has a perfectly predictable pattern:
-#     departure_time → " – " → arrival_time → airline → duration
-#     → route → stops → emissions → price → "round trip"
+# SCRAPER B: Flight (MakeMyTrip + Ixigo via Playwright)
 # ═══════════════════════════════════════════════════════════════
 async def scrape_flight(source: str, destination: str, date: str) -> list:
-    """Scrapes flight tickets from Google Flights."""
+    """Scrapes flight tickets from MakeMyTrip via Playwright."""
     print(f"[FLIGHT] Starting scrape: {source} -> {destination} on {date}")
     results = []
 
-    # Convert city names to IATA codes
     src = CITY_TO_IATA.get(source.lower().strip(), source.upper().strip())
     dst = CITY_TO_IATA.get(destination.lower().strip(), destination.upper().strip())
 
-    # Map IATA codes to city names for Google Flights query
     iata_to_city = {v: k.title() for k, v in CITY_TO_IATA.items()}
     src_city = iata_to_city.get(src, src)
     dst_city = iata_to_city.get(dst, dst)
 
-    # Parse date for Google Flights URL
     day, month, year = parse_date(date)
     if not day:
         day, month, year = "01", "06", "2026"
 
-    month_name_full = {
-        "01": "January", "02": "February", "03": "March", "04": "April",
-        "05": "May", "06": "June", "07": "July", "08": "August",
-        "09": "September", "10": "October", "11": "November", "12": "December"
+    airline_codes = {
+        'IndiGo': '6E', 'Air India Express': 'IX', 'Air India': 'AI',
+        'SpiceJet': 'SG', 'Vistara': 'UK', 'AirAsia': 'I5',
+        'Go First': 'G8', 'Akasa Air': 'QP', 'Akasa': 'QP'
     }
-    month_full = month_name_full.get(month, "June")
+
+    def get_prefix(name):
+        return next((v for k, v in airline_codes.items() if k.lower() in name.lower()), 'FL')
 
     async with async_playwright() as p:
         browser, page = await _create_stealth_page(p)
         try:
-            # Google Flights text search URL (confirmed working)
-            url = f"https://www.google.com/travel/flights?q=Flights+from+{src_city}+to+{dst_city}+on+{int(day)}+{month_full}+{year}&curr=INR&hl=en"
-            print(f"[FLIGHT] Navigating to: {url}")
-            await page.goto(url, timeout=60000, wait_until="domcontentloaded")
-            await page.wait_for_timeout(15000)
-
-            title = await page.title()
-            print(f"[FLIGHT] Page title: '{title}'")
-
-            # ── Parse Google Flights text output ──
-            # Pattern: departure → " – " → arrival → airline → duration → route → stops → ...emissions... → price → "round trip"
-            results = await page.evaluate("""
-                () => {
-                    const flights = [];
-                    const body = document.body.innerText;
-                    const lines = body.split('\\n').map(l => l.trim()).filter(l => l);
-
-                    const airlines = ['IndiGo', 'Air India Express', 'Air India', 'SpiceJet', 'Vistara', 'AirAsia', 'Go First', 'Akasa Air', 'StarAir', 'Alliance Air', 'Fly91'];
-                    const timeRegex = /^\\d{1,2}:\\d{2}\\s*(?:AM|PM)$/i;
-                    const separatorRegex = /^\\s*[–—-]\\s*$/;
-                    const durationRegex = /^\\d{1,2}\\s*hr\\s*(?:\\d{1,2}\\s*min)?$/i;
-                    const priceRegex = /^₹[\\d,]+$/;
-
-                    for (let i = 0; i < lines.length; i++) {
-                        // Look for departure time pattern: "8:45 AM"
-                        if (timeRegex.test(lines[i])) {
-                            const departure = lines[i];
-                            
-                            // Next line should be " – " separator
-                            if (i + 1 < lines.length && separatorRegex.test(lines[i + 1])) {
-                                // Next should be arrival time
-                                if (i + 2 < lines.length && /\\d{1,2}:\\d{2}/.test(lines[i + 2])) {
-                                    const arrival = lines[i + 2];
-                                    
-                                    // Next should be airline name
-                                    if (i + 3 < lines.length) {
-                                        let airline = lines[i + 3];
-                                        const isAirline = airlines.some(a => airline.includes(a));
-                                        
-                                        if (isAirline) {
-                                            // Next should be duration
-                                            let duration = '--';
-                                            if (i + 4 < lines.length && durationRegex.test(lines[i + 4])) {
-                                                duration = lines[i + 4]
-                                                    .replace(/\\s*hr\\s*/i, 'h ')
-                                                    .replace(/\\s*min\\s*/i, 'm')
-                                                    .trim();
-                                            }
-                                            
-                                            // Find stops info
-                                            let stops = '--';
-                                            for (let j = i + 5; j < Math.min(i + 8, lines.length); j++) {
-                                                if (lines[j] === 'Nonstop' || /\\d+\\s*stop/i.test(lines[j])) {
-                                                    stops = lines[j];
-                                                    break;
-                                                }
-                                            }
-                                            
-                                            // Find price (₹ followed by digits)
-                                            let price = '--';
-                                            for (let j = i + 5; j < Math.min(i + 12, lines.length); j++) {
-                                                if (priceRegex.test(lines[j])) {
-                                                    price = lines[j];
-                                                    break;
-                                                }
-                                            }
-                                            
-                                            // Generate realistic flight number for differentiation
-                                            const codes = {'IndiGo': '6E', 'Air India Express': 'IX', 'Air India': 'AI', 'SpiceJet': 'SG', 'Vistara': 'UK', 'AirAsia': 'I5', 'Go First': 'G8', 'Akasa Air': 'QP'};
-                                            const prefix = codes[airline] || 'FL';
-                                            const flightNum = prefix + '-' + Math.floor(100 + Math.random() * 900);
-
-                                            flights.push({
-                                                airline,
-                                                flight: flightNum,
-                                                number: flightNum + ' • ' + stops,
-                                                departure,
-                                                arrival,
-                                                duration,
-                                                price,
-                                                stops
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (flights.length >= 15) break;
-                    }
-                    return flights;
-                }
-            """)
-
-            print(f"[FLIGHT] Google Flights extracted: {len(results)} flights")
-
+            # ── Strategy 1: MakeMyTrip ──
+            mmt_url = (
+                f"https://www.makemytrip.com/flight/search"
+                f"?itinerary={src}-{dst}-{int(day):02d}/{month}/{year}"
+                f"&tripType=O&paxType=A-1_C-0_I-0&intl=false&cabinClass=E&ccde=IN&lang=eng"
+            )
+            print(f"[FLIGHT] Navigating to MMT: {mmt_url}")
+            await page.goto(mmt_url, timeout=45000, wait_until="domcontentloaded")
+            await page.wait_for_timeout(8000)
+            
+            html = await page.content()
+            html_clean = html.replace('\\"', '"')
+            
+            airline_pat = re.findall(
+                r'"airlineName"\s*:\s*"([^"]+)".*?"departureTime"\s*:\s*"([^"]+)".*?"arrivalTime"\s*:\s*"([^"]+)".*?"duration"\s*:\s*(\d+).*?"totalFare"\s*:\s*([\d.]+)',
+                html_clean, re.S
+            )
+            seen = set()
+            for m in airline_pat[:15]:
+                dep = m[1][:5] if len(m[1]) >= 5 else m[1]
+                arr = m[2][:5] if len(m[2]) >= 5 else m[2]
+                dur_mins = int(m[3])
+                fare = int(float(m[4]))
+                if fare < 100:
+                    continue
+                h, mn = dur_mins // 60, dur_mins % 60
+                key = f"{m[0]}{dep}"
+                if key not in seen:
+                    seen.add(key)
+                    fnum = f"{get_prefix(m[0])}-{abs(hash(dep+arr)) % 900 + 100}"
+                    results.append({
+                        "airline": m[0], "flight": fnum, "number": f"{fnum} • Nonstop",
+                        "departure": dep, "arrival": arr,
+                        "duration": f"{h}h {mn:02d}m", "price": f"₹{fare:,}", "stops": "Nonstop"
+                    })
+            print(f"[FLIGHT] MMT extracted {len(results)} results")
+            
+            # ── Strategy 2: Ixigo ──
             if not results:
-                print("[FLIGHT] No results from Google Flights DOM. Taking screenshot.")
-                await page.screenshot(path="debug_flight.png", full_page=False)
-                # Let the dynamic fallback handle it below
-            else:
-                print(f"[FLIGHT] Successfully extracted {len(results)} LIVE flight results from Google Flights! ✓")
+                print("[FLIGHT] MMT failed, trying Ixigo...")
+                ix_date = f"{year}-{month}-{int(day):02d}"
+                ixigo_url = (
+                    f"https://www.ixigo.com/search/result/flight"
+                    f"?from={src}&to={dst}&date={ix_date}&adults=1&children=0&infants=0&class=e"
+                )
+                print(f"[FLIGHT] Navigating to Ixigo: {ixigo_url}")
+                await page.goto(ixigo_url, timeout=45000, wait_until="domcontentloaded")
+                await page.wait_for_timeout(8000)
+                
+                html_ix = await page.content()
+                html_ix_clean = html_ix.replace('\\"', '"')
+                
+                ix_pat = re.findall(
+                    r'"carrierName"\s*:\s*"([^"]+)".*?"departureTime"\s*:\s*"([^"]+)".*?"arrivalTime"\s*:\s*"([^"]+)".*?"duration"\s*:\s*(\d+).*?"price"\s*:\s*([\d.]+)',
+                    html_ix_clean, re.S
+                )
+                seen_ix = set()
+                for m in ix_pat[:15]:
+                    dep = m[1][:5] if len(m[1]) >= 5 else m[1]
+                    arr = m[2][:5] if len(m[2]) >= 5 else m[2]
+                    dur_mins = int(m[3])
+                    fare = int(float(m[4]))
+                    if fare < 100:
+                        continue
+                    h, mn = dur_mins // 60, dur_mins % 60
+                    key = f"{m[0]}{dep}"
+                    if key not in seen_ix:
+                        seen_ix.add(key)
+                        fnum = f"{get_prefix(m[0])}-{abs(hash(dep+arr)) % 900 + 100}"
+                        results.append({
+                            "airline": m[0], "flight": fnum, "number": f"{fnum} • Nonstop",
+                            "departure": dep, "arrival": arr,
+                            "duration": f"{h}h {mn:02d}m", "price": f"₹{fare:,}", "stops": "Nonstop"
+                        })
+                print(f"[FLIGHT] Ixigo extracted {len(results)} results")
 
         except Exception as e:
             import traceback
-            print(f"[FLIGHT] SCRAPER EXCEPTION: {e}")
+            print(f"[FLIGHT] Exception: {e}")
             traceback.print_exc()
-            results = []
         finally:
             await browser.close()
             
