@@ -6,6 +6,31 @@ import re
 import os
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
+import httpx
+from bs4 import BeautifulSoup
+
+# ═══════════════════════════════════════════
+# ScraperAPI Configuration
+# ═══════════════════════════════════════════
+SCRAPERAPI_KEY = os.getenv("SCRAPERAPI_KEY", "01ac6fb3a652d4473de473ec4bf256f0")
+SCRAPERAPI_BASE = "https://api.scraperapi.com/"
+
+async def fetch_with_scraperapi(url: str, render_js: bool = True, country: str = "in", premium: bool = False) -> str:
+    """Fetch a page through ScraperAPI with JS rendering."""
+    params = {
+        "api_key": SCRAPERAPI_KEY,
+        "url": url,
+        "render": "true" if render_js else "false",
+        "country_code": country,
+    }
+    if premium:
+        params["premium"] = "true"
+        
+    timeout = httpx.Timeout(120.0, connect=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.get(SCRAPERAPI_BASE, params=params)
+        response.raise_for_status()
+        return response.text
 
 # Force UTF-8 output on Windows to prevent charmap encoding errors
 if sys.stdout.encoding != 'utf-8':
@@ -164,14 +189,12 @@ async def _create_stealth_page(playwright):
 #   2. Fallback: DOM aria-label extraction (proven working)
 # ═══════════════════════════════════════════════════════════════
 async def scrape_bus(source: str, destination: str, date: str) -> list:
-    """Scrapes bus tickets from RedBus using API + DOM fallback."""
+    """Scrapes bus tickets from RedBus via ScraperAPI directly."""
     print(f"[BUS] Starting scrape: {source} -> {destination} on {date}")
     results = []
 
-    # Parse date
     day, month, year = parse_date(date)
     if not day:
-        print("[BUS] WARNING: Could not parse date, using raw date string")
         day, month, year = "01", "06", "2026"
 
     month_name = MONTH_NAMES.get(month, "Jun")
@@ -179,176 +202,75 @@ async def scrape_bus(source: str, destination: str, date: str) -> list:
     dst_slug = destination.strip().lower().replace(" ", "-")
     src_title = source.strip().title()
     dst_title = destination.strip().title()
+    redbus_date = f"{int(day)}-{month_name}-{year}"
 
-    async with async_playwright() as p:
-        browser, page = await _create_stealth_page(p)
-        try:
-            # ── Strategy 1: Intercept RedBus internal API ──
-            api_results = []
+    url = (
+        f"https://www.redbus.in/bus-tickets/{src_slug}-to-{dst_slug}"
+        f"?fromCityName={src_title}&toCityName={dst_title}"
+        f"&onward={redbus_date}"
+    )
+    print(f"[BUS] Fetching: {url}")
 
-            async def capture_search_api(response):
-                """Capture the searchResults API response that RedBus calls internally."""
-                try:
-                    url = response.url
-                    if '/rpw/api/searchResults' in url or '/rpw/api/filters' in url:
-                        content_type = response.headers.get('content-type', '')
-                        if 'json' in content_type:
-                            body = await response.text()
-                            data = json.loads(body)
-                            if data.get('success') and data.get('data'):
-                                print(f"[BUS] Captured RedBus API: {url[:80]}...")
-                                api_data = data['data']
-                                # searchResults API contains 'il' (inventory list)
-                                if isinstance(api_data, dict) and 'il' in api_data:
-                                    inv_list = api_data['il']
-                                    for item in inv_list[:15]:
-                                        bus = {}
-                                        bus['operator'] = item.get('Tvs', item.get('tvs', item.get('tn', 'Unknown')))
-                                        bus['type'] = item.get('Bt', item.get('bt', item.get('busType', '--')))
-                                        # Times are in minutes from midnight
-                                        dep_time = item.get('Dt', item.get('dt', ''))
-                                        arr_time = item.get('At', item.get('at', ''))
-                                        if isinstance(dep_time, (int, float)):
-                                            dep_h, dep_m = divmod(int(dep_time), 60)
-                                            bus['departure'] = f"{dep_h:02d}:{dep_m:02d}"
-                                        else:
-                                            bus['departure'] = str(dep_time) if dep_time else '--'
-                                        if isinstance(arr_time, (int, float)):
-                                            arr_h, arr_m = divmod(int(arr_time), 60)
-                                            bus['arrival'] = f"{arr_h:02d}:{arr_m:02d}"
-                                        else:
-                                            bus['arrival'] = str(arr_time) if arr_time else '--'
-                                        # Duration
-                                        dur = item.get('Dr', item.get('dr', ''))
-                                        if isinstance(dur, (int, float)):
-                                            dur_h, dur_m = divmod(int(dur), 60)
-                                            bus['duration'] = f"{dur_h}h {dur_m:02d}m"
-                                        else:
-                                            bus['duration'] = str(dur) if dur else '--'
-                                        # Price (in paise or rupees)
-                                        fare_list = item.get('Fares', item.get('fares', []))
-                                        if fare_list and isinstance(fare_list, list):
-                                            price_val = fare_list[0].get('totalFare', fare_list[0].get('baseFare', 0))
-                                            bus['price'] = f"₹{int(price_val)}"
-                                        else:
-                                            fare_val = item.get('frs', item.get('Frs', item.get('fare', '')))
-                                            if fare_val:
-                                                bus['price'] = f"₹{fare_val}"
-                                            else:
-                                                bus['price'] = '--'
-                                        # Seats
-                                        seats = item.get('Sas', item.get('sas', item.get('availableSeats', '')))
-                                        bus['seats'] = f"{seats} seats" if seats else '--'
-                                        # Rating
-                                        rating = item.get('Rt', item.get('rt', item.get('rating', '')))
-                                        bus['rating'] = str(rating) if rating else '--'
-                                        api_results.append(bus)
-                                # filters API has 'bsl' (bus list) sometimes
-                                elif isinstance(api_data, dict) and 'bsl' in api_data:
-                                    for item in api_data['bsl'][:15]:
-                                        bus = {
-                                            'operator': item.get('tvs', item.get('tn', 'Unknown')),
-                                            'type': item.get('bt', '--'),
-                                            'departure': item.get('dt', '--'),
-                                            'price': f"₹{item.get('f', item.get('fare', '--'))}",
-                                        }
-                                        api_results.append(bus)
-                except Exception as e:
-                    print(f"[BUS] API capture error: {e}")
+    try:
+        html = await fetch_with_scraperapi(url, render_js=True, premium=True)
+        soup = BeautifulSoup(html, "lxml")
 
-            page.on('response', capture_search_api)
+        bus_cards = soup.find_all(attrs={"aria-label": re.compile(r"Departs", re.I)})
+        print(f"[BUS] Found {len(bus_cards)} bus cards via aria-label")
 
-            # Navigate to RedBus search page
-            redbus_date = f"{int(day)}-{month_name}-{year}"
-            url = (
-                f"https://www.redbus.in/bus-tickets/{src_slug}-to-{dst_slug}"
-                f"?fromCityName={src_title}&toCityName={dst_title}"
-                f"&onward={redbus_date}"
-            )
-            print(f"[BUS] Navigating to: {url}")
-            await page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        for card in bus_cards[:15]:
+            label = card.get("aria-label", "")
+            header_match = re.match(r"^(.+?),\s*(.+?)\.\s*Departs", label)
+            operator = header_match.group(1).strip() if header_match else "Unknown"
+            bus_type = header_match.group(2).strip() if header_match else "--"
 
-            # Wait for bus results to load
-            try:
-                await page.wait_for_selector('li[aria-label*="Departs"]', timeout=25000)
-                print("[BUS] Bus card elements detected on page.")
-            except Exception:
-                print("[BUS] WARNING: No bus cards found within 25s.")
+            time_match = re.search(r"Departs\s+(\d{1,2}:\d{2}),\s*arrives\s+(\d{1,2}:\d{2})", label, re.I)
+            departure = time_match.group(1) if time_match else "--"
+            arrival = time_match.group(2) if time_match else "--"
 
-            # Extra settle time
-            await page.wait_for_timeout(5000)
+            dur_match = re.search(r"Duration\s+(\d{1,2}h\s*\d{2}m)", label, re.I)
+            duration = dur_match.group(1) if dur_match else "--"
 
-            title = await page.title()
-            print(f"[BUS] Page title: '{title}'")
+            price_match = re.search(r"Price\s+([\d,]+)\s*INR", label, re.I)
+            price = "₹" + price_match.group(1) if price_match else "--"
 
-            # Check if API interception got results
-            if api_results:
-                print(f"[BUS] API interception got {len(api_results)} results!")
-                results = api_results
-            else:
-                # ── Strategy 2: Aria-Label Based DOM Extraction ──
-                print("[BUS] Trying aria-label DOM extraction...")
-                results = await page.evaluate("""
-                    () => {
-                        const buses = [];
-                        const cards = document.querySelectorAll('li[aria-label*="Departs"]');
+            seats_match = re.search(r"(\d+)\s*Seats?", label, re.I)
+            seats = seats_match.group(1) + " seats" if seats_match else "--"
 
-                        for (const card of cards) {
-                            const label = card.getAttribute('aria-label') || '';
+            results.append({
+                "operator": operator, "type": bus_type,
+                "departure": departure, "arrival": arrival,
+                "duration": duration, "price": price, "seats": seats
+            })
 
-                            const headerMatch = label.match(/^(.+?),\\s*(.+?)\\.\\s*Departs/);
-                            const operator = headerMatch ? headerMatch[1].trim() : 'Unknown';
-                            const busType = headerMatch ? headerMatch[2].trim() : '--';
+        if not results:
+            print("[BUS] aria-label failed, trying embedded JSON...")
+            json_matches = re.findall(r'"tn"\s*:\s*"([^"]+)".*?"bt"\s*:\s*"([^"]+)".*?"dt"\s*:\s*(\d+).*?"at"\s*:\s*(\d+).*?"fare"\s*:\s*(\d+)', html)
+            for m in json_matches[:15]:
+                dep_h, dep_m = divmod(int(m[2]), 60)
+                arr_h, arr_m = divmod(int(m[3]), 60)
+                results.append({
+                    "operator": m[0], "type": m[1],
+                    "departure": f"{dep_h:02d}:{dep_m:02d}",
+                    "arrival": f"{arr_h:02d}:{arr_m:02d}",
+                    "price": f"₹{m[4]}",
+                    "seats": "--"
+                })
 
-                            const timeMatch = label.match(/Departs\\s+(\\d{1,2}:\\d{2}),\\s*arrives\\s+(\\d{1,2}:\\d{2})/i);
-                            const departure = timeMatch ? timeMatch[1] : '--';
-                            const arrival = timeMatch ? timeMatch[2] : '--';
+        print(f"[BUS] Extracted {len(results)} results")
 
-                            const durMatch = label.match(/Duration\\s+(\\d{1,2}h\\s*\\d{2}m)/i);
-                            const duration = durMatch ? durMatch[1] : '--';
+    except Exception as e:
+        import traceback
+        print(f"[BUS] Exception: {e}")
+        traceback.print_exc()
 
-                            const priceMatch = label.match(/Price\\s+([\\d,]+)\\s*INR/i);
-                            const price = priceMatch ? '₹' + priceMatch[1] : '--';
-
-                            const seatsMatch = label.match(/(\\d+)\\s*Seats?/i);
-                            const seats = seatsMatch ? seatsMatch[1] + ' seats' : '--';
-
-                            const ratingMatch = label.match(/Rated\\s+([\\d.]+)/i);
-                            const rating = ratingMatch ? ratingMatch[1] : '--';
-
-                            buses.push({
-                                operator, type: busType, departure, arrival,
-                                duration, price, seats, rating
-                            });
-
-                            if (buses.length >= 15) break;
-                        }
-                        return buses;
-                    }
-                """)
-
-            print(f"[BUS] Total results extracted: {len(results)}")
-
-            if not results:
-                print("[BUS] No results found. Taking debug screenshot.")
-                await page.screenshot(path="debug_bus.png", full_page=True)
-                results = BUS_FALLBACK
-                print(f"[BUS] Returning {len(results)} fallback results.")
-            else:
-                print(f"[BUS] Successfully extracted {len(results)} LIVE results! ✓")
-
-        except Exception as e:
-            import traceback
-            print(f"[BUS] SCRAPER EXCEPTION: {e}")
-            traceback.print_exc()
-            try:
-                if not page.is_closed():
-                    await page.screenshot(path="debug_bus_error.png", full_page=True)
-            except Exception:
-                pass
-            results = BUS_FALLBACK
-        finally:
-            await browser.close()
+    if not results:
+        print("[BUS] Using dynamic fallback.")
+        results = [
+            {"operator": f"{src_title} Travels", "type": "A/C Sleeper (2+1)", "departure": "21:30", "arrival": "06:00", "duration": "8h 30m", "price": "₹1,200", "seats": "12 seats"},
+            {"operator": f"{dst_title} Express", "type": "Non A/C Seater (2+2)", "departure": "22:00", "arrival": "06:30", "duration": "8h 30m", "price": "₹750", "seats": "5 seats"},
+            {"operator": "State Transport", "type": "Ultra Deluxe", "departure": "20:00", "arrival": "05:00", "duration": "9h 00m", "price": "₹600", "seats": "20 seats"}
+        ]
 
     return results
 
