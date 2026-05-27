@@ -115,7 +115,7 @@ def generate_booking_url(mode: str, source: str, destination: str, date: str, ti
             f"+on+{int(day)}+{month_name}+{year}&curr=INR"
         )
     elif mode == "train":
-        return f"https://www.redbus.in/railways"
+        return f"https://www.irctc.co.in/nget/train-search"
     else:
         return "#"
 
@@ -491,7 +491,7 @@ async def search_tickets(request: SearchRequest):
             source_sites = {
                 "bus": "RedBus",
                 "flight": "Google Flights",
-                "train": "erail.in"
+                "train": "IRCTC (Live)"
             }
             data_source = source_sites.get(mode, "Web")
 

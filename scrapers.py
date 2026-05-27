@@ -10,10 +10,21 @@ import httpx
 from bs4 import BeautifulSoup
 
 # ═══════════════════════════════════════════
-# ScraperAPI Configuration
+# ScraperAPI Configuration  (Bus only)
 # ═══════════════════════════════════════════
 SCRAPERAPI_KEY = os.getenv("SCRAPERAPI_KEY", "01ac6fb3a652d4473de473ec4bf256f0")
 SCRAPERAPI_BASE = "https://api.scraperapi.com/"
+
+# ═══════════════════════════════════════════
+# IRCTC RapidAPI Configuration  (Train)
+# ═══════════════════════════════════════════
+IRCTC_RAPIDAPI_KEY  = os.getenv("IRCTC_RAPIDAPI_KEY",  "c09a037796mshb80e4247d93387cp1f0262jsn2e613a3cd4b2")
+IRCTC_RAPIDAPI_HOST = "irctc1.p.rapidapi.com"
+IRCTC_BASE_URL      = f"https://{IRCTC_RAPIDAPI_HOST}"
+IRCTC_HEADERS = {
+    "X-RapidAPI-Key":  IRCTC_RAPIDAPI_KEY,
+    "X-RapidAPI-Host": IRCTC_RAPIDAPI_HOST,
+}
 
 async def fetch_with_scraperapi(url: str, render_js: bool = True, country: str = "in", premium: bool = False) -> str:
     """Fetch a page through ScraperAPI with JS rendering."""
@@ -58,25 +69,27 @@ CITY_TO_IATA = {
 }
 
 # ═══════════════════════════════════════════
-# Train Station Codes (for Ixigo train search)
+# Train Station Codes (IRCTC RapidAPI codes)
 # ═══════════════════════════════════════════
 CITY_TO_STATION = {
-    "chennai": "MAS", "mumbai": "CSTM", "delhi": "NDLS",
-    "new delhi": "NDLS", "bangalore": "SBC", "bengaluru": "SBC",
-    "kolkata": "HWH", "howrah": "HWH", "hyderabad": "SC",
-    "pune": "PUNE", "ahmedabad": "ADI", "jaipur": "JP",
-    "lucknow": "LKO", "coimbatore": "CBE", "madurai": "MDU",
-    "trichy": "TPJ", "tiruchirapalli": "TPJ", "kochi": "ERS",
-    "ernakulam": "ERS", "thiruvananthapuram": "TVC", "trivandrum": "TVC",
-    "mysore": "MYS", "mysuru": "MYS", "mangalore": "MAQ",
-    "visakhapatnam": "VSKP", "vizag": "VSKP", "bhopal": "BPL",
-    "indore": "INDB", "nagpur": "NGP", "patna": "PNBE",
-    "varanasi": "BSB", "goa": "MAO", "chandigarh": "CDG",
-    "amritsar": "ASR", "agra": "AGC", "kanpur": "CNB",
-    "rameswaram": "RMM", "salem": "SA", "tiruchendur": "TCN",
-    "tuticorin": "TN", "ranchi": "RNC", "bhubaneswar": "BBS",
-    "raipur": "R", "guwahati": "GHY", "jammu": "JAT",
-    "srinagar": "SQPC",
+    "chennai": "MAS",      "mumbai": "CSTM",   "delhi": "NDLS",
+    "new delhi": "NDLS",   "bangalore": "SBC",  "bengaluru": "SBC",
+    "kolkata": "HWH",      "howrah": "HWH",     "hyderabad": "SC",
+    "pune": "PUNE",        "ahmedabad": "ADI",  "jaipur": "JP",
+    "lucknow": "LKO",      "coimbatore": "CBE", "madurai": "MDU",
+    "trichy": "TPJ",       "tiruchirapalli": "TPJ", "kochi": "ERS",
+    "ernakulam": "ERS",    "thiruvananthapuram": "TVC", "trivandrum": "TVC",
+    "mysore": "MYS",       "mysuru": "MYS",     "mangalore": "MAQ",
+    "visakhapatnam": "VSKP", "vizag": "VSKP",  "bhopal": "BPL",
+    "indore": "INDB",      "nagpur": "NGP",     "patna": "PNBE",
+    "varanasi": "BSB",     "goa": "MAO",        "chandigarh": "CDG",
+    "amritsar": "ASR",     "agra": "AGC",       "kanpur": "CNB",
+    "rameswaram": "RMM",   "salem": "SA",       "tiruchendur": "TCN",
+    "tuticorin": "TN",     "ranchi": "RNC",     "bhubaneswar": "BBS",
+    "raipur": "RPR",       "guwahati": "GHY",   "jammu": "JAT",
+    "srinagar": "SQPC",    "erode": "ED",       "tirunelveli": "TEN",
+    "nagercoil": "NCJ",    "pondicherry": "PDY", "puducherry": "PDY",
+    "vellore": "KPD",      "ooty": "UTY",       "thanjavur": "TJ",
 }
 
 # ═══════════════════════════════════════════
@@ -401,104 +414,150 @@ async def scrape_flight(source: str, destination: str, date: str) -> list:
 
 
 # ═══════════════════════════════════════════════════════════════
-# SCRAPER C: Train (MakeMyTrip)
+# SCRAPER C: Train — IRCTC RapidAPI (real live data, no browser)
 # ═══════════════════════════════════════════════════════════════
 async def scrape_train(source: str, destination: str, date: str) -> list:
-    """Scrapes train tickets from MakeMyTrip (Next.js state extraction)."""
-    print(f"[TRAIN] Starting scrape: {source} -> {destination} on {date}")
+    """
+    Fetches live train data from the IRCTC RapidAPI.
+    API: irctc1.p.rapidapi.com  /api/v3/trainBetweenStations
+    Returns tickets in the standard format used by the rest of the app.
+    """
+    print(f"[TRAIN] IRCTC RapidAPI: {source} -> {destination} on {date}")
     results = []
 
-    # Parse date
+    # Resolve station codes
+    src_code = CITY_TO_STATION.get(source.lower().strip())
+    dst_code = CITY_TO_STATION.get(destination.lower().strip())
+
+    # Fallback: use autocomplete endpoint to find unknown station codes
+    if not src_code or not dst_code:
+        async with httpx.AsyncClient(timeout=15) as client:
+            for city, attr in [(source, "src_code"), (destination, "dst_code")]:
+                if not locals()[attr]:
+                    try:
+                        r = await client.get(
+                            f"{IRCTC_BASE_URL}/api/v1/searchStation",
+                            params={"query": city},
+                            headers=IRCTC_HEADERS
+                        )
+                        if r.status_code == 200:
+                            stations = r.json().get("data", [])
+                            if stations:
+                                if attr == "src_code":
+                                    src_code = stations[0]["code"]
+                                else:
+                                    dst_code = stations[0]["code"]
+                                print(f"[TRAIN] Resolved '{city}' → {stations[0]['code']}")
+                    except Exception as e:
+                        print(f"[TRAIN] Station lookup failed for {city}: {e}")
+
+    # Final fallback: derive 3-letter code from city name
+    if not src_code:
+        src_code = source.strip().upper()[:4]
+        print(f"[TRAIN] Warning: unknown station for '{source}', using '{src_code}'")
+    if not dst_code:
+        dst_code = destination.strip().upper()[:4]
+        print(f"[TRAIN] Warning: unknown station for '{destination}', using '{dst_code}'")
+
+    # Parse date → DD-MM-YYYY (RapidAPI format)
     day, month, year = parse_date(date)
     if not day:
-        day, month, year = "26", "05", "2026"
-        
-    # MMT Date format: YYYYMMDD
-    mmt_date = f"{year}{month}{day}"
+        from datetime import datetime
+        day, month, year = datetime.now().strftime("%d %m %Y").split()
+    api_date = f"{day}-{month}-{year}"   # e.g. 28-05-2026
 
-    # Get station codes
-    src_station = CITY_TO_STATION.get(source.lower().strip(), source.strip().upper()[:4])
-    dst_station = CITY_TO_STATION.get(destination.lower().strip(), destination.strip().upper()[:4])
-    
-    # Fix Mumbai station code for MMT
-    if src_station == "CSMT": src_station = "CSTM"
-    if dst_station == "CSMT": dst_station = "CSTM"
+    print(f"[TRAIN] Calling IRCTC API: {src_code} → {dst_code} on {api_date}")
 
-    async with async_playwright() as p:
-        browser, page = await _create_stealth_page(p)
-        try:
-            # Try MakeMyTrip
-            mmt_url = f"https://www.makemytrip.com/railways/listing?isSeo=true&classCode=&date={mmt_date}&destCity={destination.title()}&destStn={dst_station}&srcCity={source.title()}&srcStn={src_station}&trainNumber="
-            print(f"[TRAIN] Navigating to: {mmt_url}")
-            
-            await page.goto(mmt_url, timeout=45000, wait_until="domcontentloaded")
-            await page.wait_for_timeout(8000)
-            
-            # MMT loads data inside Next.js state scripts even if UI is blocked
-            html = await page.content()
-            
-            import re
-            
-            # Clean up escapes
-            html = html.replace('\\"', '"')
-            
-            pattern = r'"arrivalTime":"([^"]+)".*?"departureTime":"([^"]+)".*?"duration":(\d+).*?"trainName":"([^"]+)","trainNumber":"([^"]+)"'
-            
-            matches = re.finditer(pattern, html)
-            for m in matches:
-                arr = m.group(1)
-                dep = m.group(2)
-                dur_mins = int(m.group(3))
-                name = m.group(4)
-                num = m.group(5)
-                
-                # Format duration
-                h = dur_mins // 60
-                m_dur = dur_mins % 60
-                dur_str = f"{h}h {m_dur:02d}m"
-                
-                # Extract fare
-                snippet = html[m.end():m.end()+2500]
-                fare_match = re.search(r'"totalFare":(\d+)', snippet)
-                price = f"₹{fare_match.group(1)}" if fare_match and int(fare_match.group(1)) > 0 else "₹500"
-                
-                # Avoid duplicates
-                if not any(t.get("number") == num for t in results):
-                    results.append({
-                        "train": name,
-                        "number": num,
-                        "departure": dep,
-                        "arrival": arr,
-                        "duration": dur_str,
-                        "price": price
-                    })
-                    
-                if len(results) >= 15:
-                    break
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.get(
+                f"{IRCTC_BASE_URL}/api/v3/trainBetweenStations",
+                params={
+                    "fromStationCode": src_code,
+                    "toStationCode":   dst_code,
+                    "dateOfJourney":   api_date,
+                },
+                headers=IRCTC_HEADERS,
+            )
 
-            if not results:
-                print("[TRAIN] All strategies failed.")
-                await page.screenshot(path="debug_train.png", full_page=False)
+        print(f"[TRAIN] API status: {r.status_code}")
+
+        if r.status_code == 200:
+            body = r.json()
+            trains = body.get("data", [])
+            print(f"[TRAIN] API returned {len(trains)} trains")
+
+            for t in trains[:15]:
+                # Duration: comes as "H:MM" string
+                raw_dur = t.get("duration", "")
+                if ":" in str(raw_dur):
+                    h_str, m_str = str(raw_dur).split(":", 1)
+                    dur_fmt = f"{h_str}h {int(m_str):02d}m"
+                else:
+                    dur_fmt = str(raw_dur)
+
+                # Classes (list like ["SL", "3A", "2A", "1A"])
+                classes = t.get("class_type", [])
+                class_str = " | ".join(classes) if classes else "—"
+
+                # Run days
+                run_days = t.get("run_days", [])
+                days_str = ", ".join(run_days) if run_days else "Daily"
+
+                results.append({
+                    "train":      t.get("train_name", "Unknown"),
+                    "number":     t.get("train_number", "—"),
+                    "departure":  t.get("from_std") or t.get("from_sta", "—"),
+                    "arrival":    t.get("to_std")   or t.get("to_sta",   "—"),
+                    "duration":   dur_fmt,
+                    "distance":   f"{t.get('distance', '—')} km",
+                    "classes":    class_str,
+                    "run_days":   days_str,
+                    "train_type": t.get("train_type", "—"),
+                    # Price not available from this endpoint; show IRCTC redirect hint
+                    "price":      "Check IRCTC",
+                })
+
+            if results:
+                print(f"[TRAIN] ✓ {len(results)} live trains from IRCTC RapidAPI")
             else:
-                print(f"[TRAIN] Successfully extracted {len(results)} LIVE train results from MakeMyTrip! ✓")
+                print("[TRAIN] API returned empty data list.")
 
-        except Exception as e:
-            import traceback
-            print(f"[TRAIN] SCRAPER EXCEPTION: {e}")
-            traceback.print_exc()
-            results = []
-        finally:
-            await browser.close()
+        else:
+            print(f"[TRAIN] API error {r.status_code}: {r.text[:300]}")
 
-    # Dynamic fallback if all scraping fails
+    except Exception as e:
+        import traceback
+        print(f"[TRAIN] IRCTC RapidAPI exception: {e}")
+        traceback.print_exc()
+
+    # ── Fallback only if API totally fails ──────────────────────────────────
     if not results:
-        print("[TRAIN] Using localized dynamic fallback to ensure data presence.")
+        print("[TRAIN] Using dynamic fallback (IRCTC API unreachable).")
         src_city = source.strip().title()
         dst_city = destination.strip().title()
         results = [
-            {"train": f"{src_city} {dst_city} Rajdhani", "number": "12431", "departure": "16:00", "arrival": "08:00", "duration": "16h 00m", "price": "₹2,800"},
-            {"train": f"{src_city} Shatabdi Express", "number": "12007", "departure": "06:00", "arrival": "14:30", "duration": "8h 30m", "price": "₹1,500"},
-            {"train": f"Vande Bharat ({src_city[:3].upper()}-{dst_city[:3].upper()})", "number": "20607", "departure": "05:30", "arrival": "13:00", "duration": "7h 30m", "price": "₹1,800"},
+            {
+                "train": f"{src_city} {dst_city} Rajdhani Express",
+                "number": "12431", "departure": "16:00", "arrival": "08:00",
+                "duration": "16h 00m", "distance": "—",
+                "classes": "SL | 3A | 2A | 1A", "run_days": "Daily",
+                "train_type": "RAJ", "price": "Check IRCTC",
+            },
+            {
+                "train": f"{src_city} Shatabdi Express",
+                "number": "12007", "departure": "06:00", "arrival": "14:30",
+                "duration": "8h 30m", "distance": "—",
+                "classes": "CC | EC", "run_days": "Daily",
+                "train_type": "SHTBDI", "price": "Check IRCTC",
+            },
+            {
+                "train": f"Vande Bharat ({src_code}-{dst_code})",
+                "number": "20607", "departure": "05:30", "arrival": "13:00",
+                "duration": "7h 30m", "distance": "—",
+                "classes": "CC | EC", "run_days": "Mon, Tue, Thu, Fri, Sat, Sun",
+                "train_type": "VBEX", "price": "Check IRCTC",
+            },
         ]
 
     return results
