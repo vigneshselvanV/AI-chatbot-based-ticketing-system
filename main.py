@@ -211,62 +211,99 @@ async def search_tickets(request: SearchRequest):
     today = get_today_str()
     tomorrow = get_tomorrow_str()
 
-    # ── STEP 1: Intent Extraction ──
+    # ── STEP 1: Intent Extraction (Memory-Aware) ──
     system_intent = (
-        'You are a STRICT intent extraction API. You MUST output ONLY valid JSON. '
-        'Do NOT answer the user\'s question. Do NOT provide travel options. Do NOT chat. '
-        'Extract the travel info into EXACTLY this JSON format: '
-        '{"mode": "bus|train|flight|all", "source": "City", "destination": "City", "date": "DD-MM-YYYY", "preference": "cheapest|ac|seater|sleeper|null"}. '
-        'Rules: '
-        '- bus/coach/travels → mode is "bus". '
-        '- train/express/railway → mode is "train". '
+        'You are a STRICT intent extraction API for an Indian travel booking assistant. '
+        'You MUST output ONLY valid JSON. Do NOT answer the user. Do NOT chat. '
+        'Extract travel info into EXACTLY this JSON format: '
+        '{"mode": "bus|train|flight|all", "source": "City", "destination": "City", '
+        '"date": "DD-MM-YYYY", "preference": "cheapest|ac|seater|sleeper|null", '
+        '"intent": "search|change_mode|change_date|greeting|help|cancel"}. '
+        '\n'
+        'MEMORY RULES (CRITICAL): '
+        '- You will receive PREVIOUSLY KNOWN context. ALWAYS preserve those values. '
+        '- Only OVERRIDE a field if the user EXPLICITLY provides a new value. '
+        '- If the user says just "tomorrow" → only update date, keep source/destination/mode from context. '
+        '- If the user says "by train" or "show trains" → only update mode, keep everything else. '
+        '- If the user says "show flights instead" → intent is "change_mode", update mode to "flight", keep source/destination/date. '
+        '- NEVER set a field to null if it was already known from context. '
+        '\n'
+        'MODE DETECTION: '
+        '- bus/coach/travels/redbus → mode is "bus". '
+        '- train/express/railway/irctc → mode is "train". '
         '- flight/fly/plane/air → mode is "flight". '
         '- compare/comparison/all/every mode/cheapest way/best way/options → mode is "all". '
-        '- cheapest/lowest price/budget/low price → preference is "cheapest". '
+        '- If the user just says "travel"/"ticket"/"go to" without specifying mode, set mode to "all". '
+        '\n'
+        'PREFERENCE DETECTION: '
+        '- cheapest/lowest price/budget → preference is "cheapest". '
         '- ac/air conditioned → preference is "ac". '
         '- seater/seat → preference is "seater". '
         '- sleeper/berth → preference is "sleeper". '
-        '- If the user just says "travel" or "ticket" or "go to" without specifying a mode, set mode to "all". '
-        '- If no source/destination found → return {"mode": null, "source": null, "destination": null, "date": null, "preference": null}. '
-        '- If date is missing, set date to null (do NOT guess a date). '
+        '\n'
+        'SHORT MESSAGE UNDERSTANDING: '
+        '- "tomorrow" / "today" / "next friday" / "15 June" → update date only. '
+        '- "by train" / "train" → update mode only. '
+        '- "2 people" → ignore (not a field we track). '
+        '- City name alone (e.g. "Coimbatore") → likely source or destination based on context. '
+        '- "from X" → source is X. "to Y" → destination is Y. '
+        '\n'
+        'DATE RULES: '
+        '- If date is missing AND not in context, set date to null (do NOT guess). '
         f'- Convert relative dates: today={today}, tomorrow={tomorrow}. '
-        '- "next week" means 7 days from today. '
-        '- IMPORTANT: Only set source and destination if the user explicitly mentions cities/places.'
+        '- "next week" means 7 days from today. "day after tomorrow" means 2 days from today. '
+        '- "tonight" means today. "this weekend" means the coming Saturday. '
+        '\n'
+        'INTENT DETECTION: '
+        '- Normal search → intent is "search". '
+        '- "show X instead" / "switch to X" → intent is "change_mode". '
+        '- Changing date only → intent is "change_date". '
+        '- Greetings (hi/hello/hey) → intent is "greeting". '
+        '- If no travel info at all → return all fields as null with intent "greeting" or "help". '
+        '\n'
+        'IMPORTANT: Only set source/destination if the user EXPLICITLY mentions cities/places. '
+        'DO NOT infer city names from non-city words.'
     )
 
-    # Merge context from follow-up conversation
+    # ── Build memory-aware context ──
     context = request.context or {}
     merged_query = request.query
 
+    # Build context string from stored partial_intent
+    ctx_parts = []
+    if context.get("mode"):
+        ctx_parts.append(f"mode: {context['mode']}")
+    if context.get("source"):
+        ctx_parts.append(f"source: {context['source']}")
+    if context.get("destination"):
+        ctx_parts.append(f"destination: {context['destination']}")
+    if context.get("date"):
+        ctx_parts.append(f"date: {context['date']}")
+    if context.get("preference"):
+        ctx_parts.append(f"preference: {context['preference']}")
+    ctx_str = ", ".join(ctx_parts) if ctx_parts else "None"
+
+    # Build conversation history
     history_str = ""
     if request.history:
         history_msgs = []
-        for msg in request.history[-6:]:
+        for msg in request.history[-8:]:
             role = "User" if msg.get("type") == "user" else "Assistant"
             text = msg.get("text", "")
             if len(text) > 300:
                 text = text[:300] + "... [truncated]"
             history_msgs.append(f"{role}: {text}")
         if history_msgs:
-            history_str = "Recent Conversation History (For Context ONLY. DO NOT REPLY TO THIS):\n" + "\n".join(history_msgs) + "\n\n"
-            merged_query = history_str + "NOW, extract the intent from this Latest User Message: " + request.query
+            history_str = "\n".join(history_msgs)
 
-    # If we have prior context (from a follow-up), merge it
-    if context.get("source") or context.get("destination"):
-        ctx_parts = []
-        if context.get("mode"):
-            ctx_parts.append(f"mode: {context['mode']}")
-        if context.get("source"):
-            ctx_parts.append(f"from: {context['source']}")
-        if context.get("destination"):
-            ctx_parts.append(f"to: {context['destination']}")
-        if context.get("date"):
-            ctx_parts.append(f"on: {context['date']}")
-        if not history_str:
-            merged_query = f"Previously mentioned: {', '.join(ctx_parts)}. User now says: {request.query}"
-        else:
-            merged_query += f"\nPreviously extracted intent: {', '.join(ctx_parts)}"
-        print(f"Merged query: {merged_query}")
+    # Assemble the full prompt with memory context
+    merged_query = (
+        f"PREVIOUSLY KNOWN CONTEXT (preserve these unless user overrides): [{ctx_str}]\n"
+    )
+    if history_str:
+        merged_query += f"\nCONVERSATION HISTORY (for understanding flow only):\n{history_str}\n"
+    merged_query += f"\nLATEST USER MESSAGE (extract intent from this): {request.query}"
+    print(f"Merged query: {merged_query[:500]}")
 
     try:
         intent_raw = await get_ai_response(merged_query, system_intent, json_mode=True)
@@ -276,75 +313,115 @@ async def search_tickets(request: SearchRequest):
         print(f"Intent extraction failed: {e}")
         return {"type": "chat", "message": f"Sorry, I couldn't understand your request. Error details: {str(e)}"}
 
-    # ── STEP 2: Smart Follow-Up — Ask for missing details ──
-    source_raw = intent.get("source") or intent.get("origin")
-    destination_raw = intent.get("destination")
-    date = intent.get("date")
-    mode = (intent.get("mode") or "").lower() if intent.get("mode") else ""
+    # ── STEP 2: Memory Merge — Combine AI extraction with stored context ──
+    # The AI should preserve context, but we double-check here
+    source_raw = intent.get("source") or intent.get("origin") or context.get("source")
+    destination_raw = intent.get("destination") or context.get("destination")
+    date = intent.get("date") or context.get("date")
+    mode = (intent.get("mode") or context.get("mode") or "").lower()
+    preference = intent.get("preference") or context.get("preference")
+    detected_intent = (intent.get("intent") or "search").lower()
+
+    # Update intent dict with merged values
+    intent["source"] = source_raw
+    intent["destination"] = destination_raw
+    intent["date"] = date
+    intent["mode"] = mode if mode else None
+    intent["preference"] = preference
+    print(f"Merged intent: src={source_raw}, dst={destination_raw}, date={date}, mode={mode}, pref={preference}")
 
     # Has some travel intent but missing required fields
     query_lower = request.query.lower()
-    has_travel_intent = any(kw in query_lower for kw in [
-        "bus", "train", "flight", "fly", "travel", "ticket", "book",
-        "go to", "going to", "from", "ride", "journey", "trip"
-    ]) or (source_raw and destination_raw)
+    has_travel_intent = (
+        any(kw in query_lower for kw in [
+            "bus", "train", "flight", "fly", "travel", "ticket", "book",
+            "go to", "going to", "from", "ride", "journey", "trip",
+            "search", "find", "show", "check", "compare"
+        ])
+        or (source_raw and destination_raw)
+        or detected_intent in ("search", "change_mode", "change_date")
+        or bool(context)  # If we already have context, user is in a booking flow
+    )
 
     if has_travel_intent:
-        missing_fields = []
         partial_intent = {
             "source": source_raw,
             "destination": destination_raw,
             "date": date,
             "mode": mode if mode else None,
+            "preference": preference,
         }
 
+        # Determine what's missing
+        missing_fields = []
+        missing_keys = []
         if not source_raw:
-            missing_fields.append("source city (where are you traveling from?)")
+            missing_fields.append("source city")
+            missing_keys.append("source city")
         if not destination_raw:
-            missing_fields.append("destination city (where do you want to go?)")
+            missing_fields.append("destination city")
+            missing_keys.append("destination city")
         if not date:
             missing_fields.append("travel date")
+            missing_keys.append("travel date")
         if not mode:
-            missing_fields.append("travel mode (bus 🚌, train 🚆, or flight ✈️)")
+            missing_fields.append("travel mode")
+            missing_keys.append("travel mode")
 
         if missing_fields:
-            # Generate a friendly follow-up message
+            # ── SMART SINGLE-QUESTION SLOT FILLING ──
+            # Ask for only ONE missing field at a time, in priority order
+            # Priority: source → destination → mode → date
             known_parts = []
             if source_raw:
                 known_parts.append(f"from **{source_raw.title()}**")
             if destination_raw:
                 known_parts.append(f"to **{destination_raw.title()}**")
             if mode:
-                known_parts.append(f"by **{mode}**")
+                mode_emoji = {"bus": "🚌", "train": "🚆", "flight": "✈️", "all": "🔄"}.get(mode, "")
+                known_parts.append(f"by **{mode}** {mode_emoji}")
             if date:
                 known_parts.append(f"on **{date}**")
 
+            # Acknowledge what we know
             if known_parts:
-                known_str = "Got it! You want to travel " + " ".join(known_parts) + ". "
+                ack = "Got it! " + " ".join(known_parts) + ". "
             else:
-                known_str = "I'd love to help you find tickets! "
+                ack = "I'd love to help you find tickets! "
 
-            missing_str = "Could you also tell me:\n"
-            for i, field in enumerate(missing_fields, 1):
-                missing_str += f"  {i}. Your {field}\n"
-
-            missing_str += "\nFor example: *\"tomorrow by bus\"* or *\"15-06-2026 by train\"*"
+            # Ask for the FIRST missing field only (natural, concise)
+            first_missing = missing_fields[0]
+            if first_missing == "source city":
+                question = "Where are you traveling **from**?"
+            elif first_missing == "destination city":
+                question = "Where do you want to **go**?"
+            elif first_missing == "travel mode":
+                question = "How would you like to travel — bus 🚌, train 🚆, or flight ✈️?"
+            elif first_missing == "travel date":
+                question = "What date would you like to travel?"
+            else:
+                question = f"Could you tell me your {first_missing}?"
 
             return {
                 "type": "ask_details",
-                "message": known_str + missing_str,
+                "message": ack + question,
                 "partial_intent": partial_intent,
-                "missing": [f.split(" (")[0] for f in missing_fields]
+                "missing": missing_keys
             }
 
     # ── STEP 3: No travel intent at all → chat ──
     if not source_raw or not destination_raw:
         system_chat = (
-            "You are a friendly, conversational travel assistant chatbot for India. "
-            "Engage in natural conversation and answer the user's questions directly. "
-            "If they ask about you, explain that you are an AI travel assistant. "
-            "If they greet you, greet them back warmly. "
-            "Keep responses concise, helpful, and natural, gently guiding them back to booking tickets if appropriate."
+            "You are a friendly, fast, and professional AI travel assistant for India. "
+            "Your personality is warm, concise, and human-like. Use emojis naturally (🚌 🚆 ✈️). "
+            "NEVER give long robotic paragraphs. Keep responses SHORT (2-4 sentences max). "
+            "If the user greets you, greet them back warmly and briefly mention you can help with buses, trains, and flights. "
+            "If they ask about you, explain you are an AI travel assistant that finds live bus, train, and flight tickets across India. "
+            "If they ask anything off-topic, answer briefly and gently guide them back to booking. "
+            "If they seem to want to travel but haven't given details, ask what route they want. "
+            "NEVER say 'How can I assist you today?' — instead say something natural like "
+            "'Where would you like to go?' or 'What trip are you planning?' "
+            "Keep it conversational, fast, and smart."
         )
         try:
             chat_msg = await get_ai_response(request.query, system_chat, history=request.history)
@@ -353,12 +430,11 @@ async def search_tickets(request: SearchRequest):
             return {
                 "type": "chat",
                 "message": (
-                    "👋 Hello! I'm your AI travel assistant. I can help you find:\n\n"
-                    "🚌 **Bus tickets** — powered by RedBus\n"
-                    "✈️ **Flight tickets** — powered by Google Flights\n"
-                    "🚆 **Train tickets** — powered by erail.in\n\n"
-                    "Just tell me something like:\n"
-                    "*\"Find me a bus from Coimbatore to Rameswaram tomorrow\"*"
+                    "👋 Hey there! I'm your AI travel buddy.\n\n"
+                    "I can find you live tickets for:\n"
+                    "🚌 **Buses** • 🚆 **Trains** • ✈️ **Flights**\n\n"
+                    "Just tell me where you want to go!\n"
+                    "*Example: \"Bus from Chennai to Bangalore tomorrow\"*"
                 )
             }
 
