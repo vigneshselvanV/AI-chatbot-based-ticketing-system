@@ -12,13 +12,13 @@ from bs4 import BeautifulSoup
 # ═══════════════════════════════════════════
 # ScraperAPI Configuration  (Bus only)
 # ═══════════════════════════════════════════
-SCRAPERAPI_KEY = os.getenv("SCRAPERAPI_KEY", "01ac6fb3a652d4473de473ec4bf256f0")
+SCRAPERAPI_KEY = os.getenv("SCRAPERAPI_KEY", "")
 SCRAPERAPI_BASE = "https://api.scraperapi.com/"
 
 # ═══════════════════════════════════════════
 # IRCTC RapidAPI Configuration  (Train)
 # ═══════════════════════════════════════════
-IRCTC_RAPIDAPI_KEY  = os.getenv("IRCTC_RAPIDAPI_KEY",  "c09a037796mshb80e4247d93387cp1f0262jsn2e613a3cd4b2")
+IRCTC_RAPIDAPI_KEY  = os.getenv("IRCTC_RAPIDAPI_KEY",  "")
 IRCTC_RAPIDAPI_HOST = "irctc1.p.rapidapi.com"
 IRCTC_BASE_URL      = f"https://{IRCTC_RAPIDAPI_HOST}"
 IRCTC_HEADERS = {
@@ -164,7 +164,7 @@ def parse_date(date_str: str):
 # ═══════════════════════════════════════════
 async def _create_stealth_page(playwright):
     """Launches a Chromium browser with stealth and returns (browser, page)."""
-    scraperapi_key = os.getenv("SCRAPERAPI_KEY", "01ac6fb3a652d4473de473ec4bf256f0")
+    scraperapi_key = os.getenv("SCRAPERAPI_KEY", "")
     
     launch_args = {
         "headless": True,
@@ -414,6 +414,84 @@ async def scrape_flight(source: str, destination: str, date: str) -> list:
 
 
 # ═══════════════════════════════════════════════════════════════
+# Indian Railways Fare Estimator (distance-based, official slabs)
+# ═══════════════════════════════════════════════════════════════
+# Base fare per km (approx.) for each class — derived from Indian
+# Railways distance-slab fare tables (Mail/Express & Superfast).
+# These are *approximate* and include reservation + superfast charges.
+FARE_PER_KM = {
+    "1A": 3.02,   # First AC
+    "2A": 1.76,   # AC 2-Tier
+    "3A": 1.22,   # AC 3-Tier
+    "3E": 1.10,   # AC 3-Economy
+    "SL": 0.55,   # Sleeper
+    "CC": 1.25,   # AC Chair Car
+    "EC": 2.25,   # Executive Chair Car
+    "2S": 0.30,   # Second Sitting
+    "GN": 0.30,   # General
+}
+
+# Minimum fare per class
+MIN_FARE = {
+    "1A": 600, "2A": 400, "3A": 280, "3E": 250,
+    "SL": 130, "CC": 200, "EC": 400, "2S": 30, "GN": 30,
+}
+
+# Extra surcharge by train type
+TRAIN_TYPE_SURCHARGE = {
+    "RAJ":    250,   # Rajdhani (catering included)
+    "SHTBDI": 200,   # Shatabdi (catering included)
+    "VBEX":   150,   # Vande Bharat
+    "DRNTO":  100,   # Duronto
+    "GARIB":   50,   # Garib Rath
+}
+
+
+def estimate_fare(distance_km: int, class_type: str, train_type: str = "") -> int:
+    """Estimate Indian Railways fare from distance and class.
+    Returns fare in ₹ (integer)."""
+    rate = FARE_PER_KM.get(class_type.upper(), 0.80)
+    base = max(int(distance_km * rate), MIN_FARE.get(class_type.upper(), 100))
+    surcharge = TRAIN_TYPE_SURCHARGE.get(train_type.upper(), 0)
+    # Reservation charge: ₹40 for SL, ₹50 for AC classes
+    reservation = 40 if class_type.upper() in ("SL", "2S", "GN") else 50
+    # Superfast charge: ₹75 for Superfast/Shatabdi/Rajdhani
+    superfast = 75 if train_type.upper() in ("SF", "RAJ", "SHTBDI", "VBEX", "DRNTO") else 45
+    total = base + surcharge + reservation + superfast
+    # Round to nearest ₹5
+    return int(round(total / 5) * 5)
+
+
+def format_train_price(distance_km: int, classes: list, train_type: str = "") -> str:
+    """Return a formatted price string showing the lowest class fare.
+    Example: '₹385' (for the cheapest available class)."""
+    if not distance_km or distance_km <= 0:
+        return "—"
+    if not classes:
+        # Default to sleeper estimate
+        fare = estimate_fare(distance_km, "SL", train_type)
+        return f"₹{fare:,}"
+    # Find the cheapest class
+    cheapest_fare = 999999
+    for cls in classes:
+        fare = estimate_fare(distance_km, cls, train_type)
+        if fare < cheapest_fare:
+            cheapest_fare = fare
+    return f"₹{cheapest_fare:,}"
+
+
+def format_all_class_fares(distance_km: int, classes: list, train_type: str = "") -> dict:
+    """Return a dict of class → fare string for all available classes."""
+    if not distance_km or distance_km <= 0:
+        return {}
+    fares = {}
+    for cls in classes:
+        fare = estimate_fare(distance_km, cls, train_type)
+        fares[cls] = f"₹{fare:,}"
+    return fares
+
+
+# ═══════════════════════════════════════════════════════════════
 # SCRAPER C: Train — IRCTC RapidAPI (real live data, no browser)
 # ═══════════════════════════════════════════════════════════════
 async def scrape_train(source: str, destination: str, date: str) -> list:
@@ -504,18 +582,29 @@ async def scrape_train(source: str, destination: str, date: str) -> list:
                 run_days = t.get("run_days", [])
                 days_str = ", ".join(run_days) if run_days else "Daily"
 
+                # Distance & Fare estimation
+                distance_km = t.get("distance", 0)
+                train_type = t.get("train_type", "")
+                try:
+                    distance_km = int(distance_km) if distance_km else 0
+                except (ValueError, TypeError):
+                    distance_km = 0
+
+                price_str = format_train_price(distance_km, classes, train_type)
+                class_fares = format_all_class_fares(distance_km, classes, train_type)
+
                 results.append({
-                    "train":      t.get("train_name", "Unknown"),
-                    "number":     t.get("train_number", "—"),
-                    "departure":  t.get("from_std") or t.get("from_sta", "—"),
-                    "arrival":    t.get("to_std")   or t.get("to_sta",   "—"),
-                    "duration":   dur_fmt,
-                    "distance":   f"{t.get('distance', '—')} km",
-                    "classes":    class_str,
-                    "run_days":   days_str,
-                    "train_type": t.get("train_type", "—"),
-                    # Price not available from this endpoint; show IRCTC redirect hint
-                    "price":      "Check IRCTC",
+                    "train":       t.get("train_name", "Unknown"),
+                    "number":      t.get("train_number", "—"),
+                    "departure":   t.get("from_std") or t.get("from_sta", "—"),
+                    "arrival":     t.get("to_std")   or t.get("to_sta",   "—"),
+                    "duration":    dur_fmt,
+                    "distance":    f"{distance_km} km" if distance_km else "—",
+                    "classes":     class_str,
+                    "run_days":    days_str,
+                    "train_type":  train_type,
+                    "price":       price_str,
+                    "class_fares": class_fares,
                 })
 
             if results:
@@ -540,23 +629,26 @@ async def scrape_train(source: str, destination: str, date: str) -> list:
             {
                 "train": f"{src_city} {dst_city} Rajdhani Express",
                 "number": "12431", "departure": "16:00", "arrival": "08:00",
-                "duration": "16h 00m", "distance": "—",
+                "duration": "16h 00m", "distance": "1,200 km",
                 "classes": "SL | 3A | 2A | 1A", "run_days": "Daily",
-                "train_type": "RAJ", "price": "Check IRCTC",
+                "train_type": "RAJ", "price": "₹945",
+                "class_fares": {"SL": "₹945", "3A": "₹1,830", "2A": "₹2,490", "1A": "₹3,995"},
             },
             {
                 "train": f"{src_city} Shatabdi Express",
                 "number": "12007", "departure": "06:00", "arrival": "14:30",
-                "duration": "8h 30m", "distance": "—",
+                "duration": "8h 30m", "distance": "500 km",
                 "classes": "CC | EC", "run_days": "Daily",
-                "train_type": "SHTBDI", "price": "Check IRCTC",
+                "train_type": "SHTBDI", "price": "₹950",
+                "class_fares": {"CC": "₹950", "EC": "₹1,450"},
             },
             {
                 "train": f"Vande Bharat ({src_code}-{dst_code})",
                 "number": "20607", "departure": "05:30", "arrival": "13:00",
-                "duration": "7h 30m", "distance": "—",
+                "duration": "7h 30m", "distance": "500 km",
                 "classes": "CC | EC", "run_days": "Mon, Tue, Thu, Fri, Sat, Sun",
-                "train_type": "VBEX", "price": "Check IRCTC",
+                "train_type": "VBEX", "price": "₹900",
+                "class_fares": {"CC": "₹900", "EC": "₹1,400"},
             },
         ]
 
