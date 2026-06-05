@@ -347,7 +347,11 @@ async def strategyB_RedBus(from_city: str, to_city: str, date: str) -> list:
     
     async with async_playwright() as pw:
         # headless=True is required for Render. ScraperAPI proxy bypasses the bot detection.
-        browser = await pw.chromium.launch(headless=True, proxy=proxy)
+        browser = await pw.chromium.launch(
+            headless=True, 
+            proxy=proxy,
+            args=['--disable-http2', '--no-sandbox', '--disable-setuid-sandbox']
+        )
         context = await browser.new_context(
             viewport={'width': 1920, 'height': 1080},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -427,7 +431,11 @@ async def strategyC_AbhiBus(from_city: str, to_city: str, date: str) -> list:
     proxy = {"server": "http://proxy-server.scraperapi.com:8001", "username": "scraperapi", "password": scraper_key} if scraper_key else None
     
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True, proxy=proxy)
+        browser = await pw.chromium.launch(
+            headless=True, 
+            proxy=proxy,
+            args=['--disable-http2', '--no-sandbox', '--disable-setuid-sandbox']
+        )
         page = await browser.new_page()
         
         try:
