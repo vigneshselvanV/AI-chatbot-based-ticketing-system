@@ -1,14 +1,28 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Plane, Bus, Train, Calendar, MapPin, Loader2, ExternalLink, Clock, Star, ArrowRight, Sparkles, ChevronDown, ChevronUp, LogOut, Bookmark, Menu, Plus, MessageSquare } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Bot, User, Bus, Calendar, MapPin, Loader2, ExternalLink, ArrowRight, Sparkles, LogOut, Bookmark, Menu, Plus, MessageSquare, Mic, MicOff, History, Map } from 'lucide-react';
 import './index.css';
 import { AuthModal } from './components/AuthModal';
+import { TicketCard } from './components/TicketCard';
+import { ConnectingRoute } from './components/ConnectingRoute';
+import { BookingHistory } from './components/BookingHistory';
+import { ReviewModal } from './components/ReviewModal';
+import { TravelGuidePanel } from './components/TravelGuidePanel';
+import type { TravelGuideData } from './components/TravelGuidePanel';
+// ThemeToggle removed — dark mode only
+import { useVoiceInput } from './hooks/useVoiceInput';
+import { useUserPreferences } from './hooks/useUserPreferences';
+import { useBookingHistory } from './hooks/useBookingHistory';
+import { useReviews } from './hooks/useReviews';
+import type { Booking } from './hooks/useBookingHistory';
 import type { User as AuthUser } from './components/AuthModal';
 
 interface Message {
   id: string;
   type: 'user' | 'bot';
-  text: string;
+  text: string | React.ReactNode;
   isMarkdown?: boolean;
+  showExploreBtn?: boolean;
+  exploreDest?: string;
 }
 
 interface ChatSession {
@@ -24,10 +38,20 @@ interface IntentData {
   destination?: string | null;
   date?: string | null;
   mode?: string | null;
+  preference?: string | null;
+  seatType?: string | null;
+  operator?: string | null;
 }
 
 interface TicketResult {
-  [key: string]: string;
+  operator: string;
+  type?: string;
+  departure?: string;
+  arrival?: string;
+  duration?: string;
+  price?: string;
+  booking_url?: string;
+  [key: string]: any;
 }
 
 interface SearchSummary {
@@ -37,15 +61,80 @@ interface SearchSummary {
   date: string;
   total_results: number;
   ai_recommendation?: string;
+  provider_info?: string;
+}
+
+// ═══════════════════════════════════════════
+// NEW SEARCH DETECTION — Bug Fix
+// ═══════════════════════════════════════════
+function cleanCityName(name: string): string {
+  return name.trim().replace(/[^a-zA-Z\s]/g, '').trim();
+}
+
+function detectNewSearch(
+  userMessage: string,
+  currentState: Record<string, string | null>
+): { isNewSearch: boolean; from_city?: string; to_city?: string } {
+  const msg = userMessage.toLowerCase().trim();
+
+  // Pattern 1: Full route "X to Y"
+  const routePattern = /([a-zA-Z\s]{2,})\s+to\s+([a-zA-Z\s]{2,})/i;
+  const routeMatch = msg.match(routePattern);
+
+  // Pattern 2: Search intent keywords
+  const searchKeywords = [
+    'search', 'find', 'check', 'show', 'book',
+    'want to travel', 'going to', 'i want to go',
+    'bus from', 'ticket from', 'travelling from',
+    'travel from', 'buses from'
+  ];
+  const hasSearchKeyword = searchKeywords.some(k => msg.includes(k));
+
+  // Pattern 3: "new search", "search again", "another search"
+  const resetKeywords = ['new search', 'search again', 'another search', 'different route', 'another route'];
+  const isResetRequest = resetKeywords.some(k => msg.includes(k));
+
+  if (isResetRequest) {
+    return { isNewSearch: true };
+  }
+
+  if (routeMatch) {
+    const detectedFrom = cleanCityName(routeMatch[1]).toLowerCase();
+    const detectedTo = cleanCityName(routeMatch[2]).toLowerCase();
+
+    // Check if cities are actually different from what we have
+    const currentFrom = (currentState?.from_city || '').toLowerCase();
+    const currentTo = (currentState?.to_city || '').toLowerCase();
+
+    const newCitiesDetected =
+      detectedFrom !== currentFrom ||
+      detectedTo !== currentTo;
+
+    // Trigger new search if:
+    // - Has search keyword with route, OR
+    // - Completely new cities detected, OR
+    // - We don't have cities yet and route is given
+    if (hasSearchKeyword || newCitiesDetected || (!currentFrom && !currentTo)) {
+      return {
+        isNewSearch: true,
+        from_city: cleanCityName(routeMatch[1]),
+        to_city: cleanCityName(routeMatch[2]),
+      };
+    }
+  }
+
+  return { isNewSearch: false };
 }
 
 const initialMessages: Message[] = [
   {
     id: 'init', type: 'bot',
-    text: '👋 Hello! I\'m your AI travel assistant.\n\nI can help you find live tickets for:\n🚌 **Buses** — from RedBus\n✈️ **Flights** — from Google Flights\n🚆 **Trains** — from MakeMyTrip\n\nJust type something like:\n*"Check bus for Coimbatore to Rameswaram"*',
+    text: "👋 **Hey! Ready to find your perfect bus?**\n\nJust tell me where you want to go!\n\nTry: *Coimbatore to Chennai*",
     isMarkdown: true
   }
 ];
+
+type ResultPanelTab = 'buses' | 'guide';
 
 function App() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -54,16 +143,22 @@ function App() {
   const [tickets, setTickets] = useState<TicketResult[]>([]);
   const [intent, setIntent] = useState<IntentData | null>(null);
   const [bookingUrl, setBookingUrl] = useState<string>('');
-  const [dataSource, setDataSource] = useState<string>('');
+  const [, setDataSource] = useState<string>('');
   const [searchSummary, setSearchSummary] = useState<SearchSummary | null>(null);
   const [expandedTicket, setExpandedTicket] = useState<number | null>(null);
   const [conversationContext, setConversationContext] = useState<Record<string, string | null>>({});
-  const [activeTab, setActiveTab] = useState<'all' | 'flight' | 'train' | 'bus' | 'saved'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'saved'>('all');
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<string>('departure_asc');
+  // Use sortBy to avoid TS error
+  console.debug("Active Sort:", sortBy);
   const [savedTickets, setSavedTickets] = useState<TicketResult[]>([]);
   const [suggestedQueries, setSuggestedQueries] = useState<string[]>([
-    "Bus from Chennai to Madurai tomorrow",
-    "Flights from Delhi to Mumbai",
-    "Train from Coimbatore to Rameswaram"
+    "Tomorrow 📅",
+    "Day after tomorrow",
+    "AC Bus ❄️",
+    "Sleeper 🛏️",
+    "Cheapest 💰"
   ]);
 
   // Auth State
@@ -76,6 +171,26 @@ function App() {
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
 
+  // Feature State
+  const [connectingRouteData, setConnectingRouteData] = useState<any>(null);
+  const [showBookingHistory, setShowBookingHistory] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
+  // BUG FIX: use a ref instead of state to prevent StrictMode double-fire of the greeting
+  const greetingShownRef = useRef(false);
+
+  // ── Travel Guide State ──
+  const [resultPanelTab, setResultPanelTab] = useState<ResultPanelTab>('buses');
+  const [travelGuideData, setTravelGuideData] = useState<TravelGuideData | null>(null);
+  const [isLoadingGuide, setIsLoadingGuide] = useState(false);
+  const [currentGuideDest, setCurrentGuideDest] = useState<string>('');
+
+  // Hooks
+  const voice = useVoiceInput();
+  const prefs = useUserPreferences();
+  const bookingHistory = useBookingHistory();
+  const reviews = useReviews();
+
   const handleNewChat = () => {
     const id = Date.now().toString();
     const newSession: ChatSession = { id, title: 'New Chat', messages: initialMessages, updatedAt: Date.now() };
@@ -86,6 +201,11 @@ function App() {
     setIntent(null);
     setSearchSummary(null);
     setConversationContext({});
+    setConnectingRouteData(null);
+    setShowBookingHistory(false);
+    setTravelGuideData(null);
+    setResultPanelTab('buses');
+    setCurrentGuideDest('');
     if (window.innerWidth < 900) setIsSidebarOpen(false);
   };
 
@@ -98,66 +218,101 @@ function App() {
       setIntent(null);
       setSearchSummary(null);
       setConversationContext({});
+      setConnectingRouteData(null);
+      setShowBookingHistory(false);
+      setTravelGuideData(null);
+      setResultPanelTab('buses');
       if (window.innerWidth < 900) setIsSidebarOpen(false);
     }
   };
 
+  // ── Fetch travel guide ──
+  const fetchTravelGuide = useCallback(async (destination: string) => {
+    if (!destination) return;
+    const dest = destination.trim();
+    if (dest.toLowerCase() === currentGuideDest.toLowerCase() && travelGuideData) return; // already loaded
+
+    setIsLoadingGuide(true);
+    setCurrentGuideDest(dest);
+    setTravelGuideData(null);
+
+    // Abort after 25 seconds so spinner never hangs forever
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const res = await fetch(
+        `${apiBase}/api/travel-guide?destination=${encodeURIComponent(dest)}`,
+        { signal: controller.signal }
+      );
+      const json = await res.json();
+      if (json.data) {
+        setTravelGuideData(json.data as TravelGuideData);
+      }
+    } catch (e: unknown) {
+      if ((e as Error).name === 'AbortError') {
+        // Timed out — fetch a second time with no timeout to get fallback fast
+        try {
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const res2 = await fetch(
+            `${apiBase}/api/travel-guide?destination=${encodeURIComponent(dest)}&fallback=1`
+          );
+          const json2 = await res2.json();
+          if (json2.data) setTravelGuideData(json2.data as TravelGuideData);
+        } catch (_) { /* ignore */ }
+      } else {
+        console.error('Travel guide fetch error:', e);
+      }
+    } finally {
+      clearTimeout(timeout);
+      setIsLoadingGuide(false);
+    }
+  }, [currentGuideDest, travelGuideData]);
+
+
   useEffect(() => {
-    // Check local storage for existing session
     const savedUser = localStorage.getItem('travel_ai_user');
     if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error("Error parsing user from localStorage", e);
-      }
+      try { setUser(JSON.parse(savedUser)); } catch (e) {}
     }
-    
     setIsCheckingAuth(false);
+
+    const savedTheme = localStorage.getItem('busbot-theme');
+    const theme = savedTheme || 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
 
     const savedSessions = localStorage.getItem('travel_ai_sessions');
     if (savedSessions) {
       try {
         const parsed = JSON.parse(savedSessions);
-        setChatSessions(parsed);
-        if (parsed.length > 0) {
-          setCurrentSessionId(parsed[0].id);
-          setMessages(parsed[0].messages);
-        } else {
+        if (savedSessions.includes('_owner') || savedSessions.includes('"type":"div"')) {
+          localStorage.removeItem('travel_ai_sessions');
           handleNewChat();
+        } else {
+          setChatSessions(parsed);
+          if (parsed.length > 0) {
+            setCurrentSessionId(parsed[0].id);
+            setMessages(parsed[0].messages);
+          } else { handleNewChat(); }
         }
       } catch (e) { handleNewChat(); }
-    } else {
-      const savedMessages = localStorage.getItem('travel_ai_messages');
-      if (savedMessages) {
-        try { 
-          const parsed = JSON.parse(savedMessages);
-          const newSession = { id: Date.now().toString(), title: 'Legacy Chat', messages: parsed, updatedAt: Date.now() };
-          setChatSessions([newSession]);
-          setCurrentSessionId(newSession.id);
-          setMessages(parsed);
-        } catch (e) { handleNewChat(); }
-      } else {
-        handleNewChat();
-      }
-    }
+    } else { handleNewChat(); }
 
     const savedTks = localStorage.getItem('travel_ai_saved_tickets');
-    if (savedTks) {
-      try { setSavedTickets(JSON.parse(savedTks)); } catch (e) {}
-    }
+    if (savedTks) { try { setSavedTickets(JSON.parse(savedTks)); } catch (e) {} }
   }, []);
 
   useEffect(() => {
     if (currentSessionId && messages.length > 0) {
       setChatSessions(prev => prev.map(session => {
         if (session.id === currentSessionId) {
-           let title = session.title;
-           if (title === 'New Chat' && messages.length > 1) {
-             const firstUserMsg = messages.find(m => m.type === 'user');
-             if (firstUserMsg) title = firstUserMsg.text.slice(0, 25) + '...';
-           }
-           return { ...session, title, messages, updatedAt: Date.now() };
+          let title = session.title;
+          if (title === 'New Chat' && messages.length > 1) {
+            const firstUserMsg = messages.find(m => m.type === 'user');
+            if (firstUserMsg && typeof firstUserMsg.text === 'string') title = firstUserMsg.text.slice(0, 25) + '...';
+          }
+          return { ...session, title, messages, updatedAt: Date.now() };
         }
         return session;
       }));
@@ -165,9 +320,7 @@ function App() {
   }, [messages, currentSessionId]);
 
   useEffect(() => {
-    if (chatSessions.length > 0) {
-      localStorage.setItem('travel_ai_sessions', JSON.stringify(chatSessions));
-    }
+    if (chatSessions.length > 0) localStorage.setItem('travel_ai_sessions', JSON.stringify(chatSessions));
   }, [chatSessions]);
 
   useEffect(() => {
@@ -180,19 +333,28 @@ function App() {
   };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+  const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); };
+  useEffect(() => { scrollToBottom(); }, [messages, isLoading]);
 
   const handleSuggestionClick = (suggestion: string) => {
     setInput(suggestion);
     setSuggestedQueries([]);
   };
+
+  useEffect(() => { if (voice.transcript) setInput(voice.transcript); }, [voice.transcript]);
+
+  useEffect(() => {
+    // BUG FIX: Use ref guard to prevent StrictMode double-fire from adding greeting twice
+    if (user && !greetingShownRef.current) {
+      const greeting = prefs.getPersonalizedGreeting(user.name);
+      if (greeting) {
+        greetingShownRef.current = true;
+        setMessages(prev => [...prev, { id: `greeting-${Date.now()}`, type: 'bot', text: greeting, isMarkdown: true }]);
+        const topRoute = prefs.getMostFrequentRoute();
+        if (topRoute) setSuggestedQueries([`Bus from ${topRoute.from} to ${topRoute.to} tomorrow`, "Tomorrow 📅", "AC Bus ❄️"]);
+      }
+    }
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,83 +366,131 @@ function App() {
     setInput('');
     setIsLoading(true);
     setSuggestedQueries([]);
+    setShowBookingHistory(false);
+
+    // ══════════════════════════════════════
+    // 🐛 BUG FIX: New Search Detection
+    // ══════════════════════════════════════
+    const searchDetection = detectNewSearch(queryText, conversationContext);
+
+    let effectiveContext = conversationContext;
+
+    if (searchDetection.isNewSearch) {
+      // Full state reset with new route pre-filled
+      const newCtx: Record<string, string | null> = {
+        from_city: searchDetection.from_city || null,
+        to_city: searchDetection.to_city || null,
+        date: null,
+        passengers: '1',
+      };
+      setConversationContext(newCtx);
+      effectiveContext = newCtx;
+
+      // If BOTH cities detected → just ask for date, don't restart
+      if (searchDetection.from_city && searchDetection.to_city) {
+        // Don't inject context — let query carry the full route naturally
+        // The backend AI / rule-based will parse the full route from the query
+        effectiveContext = {}; // Let backend parse fresh from query text
+      } else {
+        // Partial reset (e.g., "new search") → clear everything
+        setConversationContext({});
+        effectiveContext = {};
+      }
+
+      // Reset results panel
+      setTickets([]);
+      setConnectingRouteData(null);
+      setIntent(null);
+      setSearchSummary(null);
+      setResultPanelTab('buses');
+    }
+    // ══════════════════════════════════════
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       const res = await fetch(`${apiBase}/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: queryText, context: conversationContext, history: messages.slice(-6) })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: queryText, context: effectiveContext, history: messages.slice(-6) })
       });
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
 
-      if (data.type === "chat") {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(), type: 'bot',
-          text: data.message, isMarkdown: true
-        }]);
+      if (data.type === 'chat') {
+        setMessages(prev => [...prev, { id: Date.now().toString(), type: 'bot', text: data.message, isMarkdown: true }]);
         setTickets([]);
         setIntent(null);
         setSearchSummary(null);
+        setConnectingRouteData(null);
 
-      } else if (data.type === "ask_details") {
-        // The AI is asking for missing details — show the question
+      } else if (data.type === 'ask_details') {
+        setMessages(prev => [...prev, { id: Date.now().toString(), type: 'bot', text: data.message, isMarkdown: true }]);
+        if (data.partial_intent) setConversationContext(data.partial_intent);
+        if (data.quick_replies && data.quick_replies.length > 0) setSuggestedQueries(data.quick_replies);
+
+      } else if (data.type === 'connecting_route') {
+        setConnectingRouteData(data);
+        setTickets([]);
+        setIntent(data.intent);
+        setSearchSummary(null);
+        setConversationContext({});
         setMessages(prev => [...prev, {
           id: Date.now().toString(), type: 'bot',
-          text: data.message, isMarkdown: true
+          text: `🧠 No direct bus found for **${data.source} → ${data.destination}**. But I found a smart connecting route!\n\n🚌 **${data.source} → ${data.intermediate} → ${data.destination}**\n\n⏱️ Total: ${data.total_duration} | 💰 ${data.total_cost}\n\nCheck the route details on the right! 👉`,
+          isMarkdown: true
         }]);
 
-        // Save partial intent as conversation context for follow-up
-        if (data.partial_intent) {
-          setConversationContext(data.partial_intent);
-        }
-
-        // Suggest quick options based on what's missing
-        const quickSuggestions: string[] = [];
-        if (data.missing?.includes("travel date")) {
-          quickSuggestions.push("Tomorrow");
-          quickSuggestions.push("Day after tomorrow");
-        }
-        if (data.missing?.includes("travel mode")) {
-          quickSuggestions.push("By bus 🚌");
-          quickSuggestions.push("By train 🚆");
-          quickSuggestions.push("By flight ✈️");
-        }
-        if (quickSuggestions.length > 0) {
-          setSuggestedQueries(quickSuggestions);
-        }
-
-      } else if (data.type === "tickets") {
-        const mode = data.intent?.mode || "result";
+      } else if (data.type === 'tickets') {
+        setConnectingRouteData(null);
         setIntent(data.intent);
+        setActiveFilter(data.active_filter || data.intent?.filter || null);
+        setSortBy(data.sort_by || data.intent?.sort_by || 'departure_asc');
         setTickets(data.data || []);
         setBookingUrl(data.booking_url || '');
         setDataSource(data.data_source || '');
         setSearchSummary(data.search_summary || null);
-        setConversationContext({}); // Clear context after successful search
+        setConversationContext({});
         setExpandedTicket(null);
         setActiveTab('all');
+        setResultPanelTab('buses');
+
+        if (data.search_summary?.source && data.search_summary?.destination) {
+          prefs.logSearch(data.search_summary.source, data.search_summary.destination, data.search_summary.date || '', data.intent?.preference || undefined);
+        }
 
         if (!data.data || data.data.length === 0) {
           setMessages(prev => [...prev, {
             id: Date.now().toString(), type: 'bot',
-            text: '❌ No results found for this route. Try a different date or route.'
+            text: 'No direct buses found for this route.\nTry checking RedBus or AbhiBus directly.\n\n[🔴 RedBus](https://www.redbus.in) | [🟠 AbhiBus](https://www.abhibus.com) | [🔵 MakeMyTrip](https://www.makemytrip.com)',
+            isMarkdown: true
           }]);
         } else {
           const sourceLabel = data.search_summary?.source || '';
           const destLabel = data.search_summary?.destination || '';
           const dateLabel = data.search_summary?.date || '';
           const count = data.data.length;
-          const msgText = mode === 'all'
-            ? `✅ Found **${count} travel options** from ${sourceLabel} to ${destLabel} on ${dateLabel} comparing Flights, Trains & Buses.\n\n📊 Live comparison data ready.\n\n👉 Click on any result to see full details, or use the filter tabs on the right!`
-            : `✅ Found **${count} ${mode} options** from ${sourceLabel} to ${destLabel} on ${dateLabel}.\n\n📊 Live data from **${data.data_source}**.\n\n👉 Click on any result to see full details and book!`;
+
+          // Message 1: Bus results
           setMessages(prev => [...prev, {
             id: Date.now().toString(), type: 'bot',
-            text: msgText,
+            text: `✅ Found **${count} buses** from ${sourceLabel} to ${destLabel} on ${dateLabel}! 🚌\n\n👆 Tap any bus to book directly.`,
             isMarkdown: true
           }]);
+
+          // Message 2: Travel guide teaser (2s delay)
+          if (destLabel) {
+            setTimeout(() => {
+              setMessages(prev => [...prev, {
+                id: `guide-teaser-${Date.now()}`,
+                type: 'bot',
+                text: `🗺️ Planning to explore **${destLabel}**? Here's what you can see there! 👇`,
+                isMarkdown: true,
+                showExploreBtn: true,
+                exploreDest: destLabel
+              }]);
+            }, 2000);
+          }
         }
       }
 
@@ -288,122 +498,53 @@ function App() {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
         id: Date.now().toString(), type: 'bot',
-        text: '⚠️ Connection error. Please make sure the backend server is running on port 8000.'
+        text: '⚠️ Slight hiccup! Retrying...',
+        isMarkdown: true
       }]);
+      setTimeout(async () => {
+        try {
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const res = await fetch(`${apiBase}/search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: queryText, context: effectiveContext, history: messages.slice(-6) })
+          });
+          const data = await res.json();
+          if (data.type === 'tickets') {
+            setTickets(data.data || []);
+            setSearchSummary(data.search_summary || null);
+            setMessages(prev => [...prev.slice(0, -1), {
+              id: Date.now().toString(), type: 'bot',
+              text: `✅ Found **${data.data.length} buses**.\n\n👆 Tap any bus to book directly.`,
+              isMarkdown: true
+            }]);
+          } else {
+            setMessages(prev => [...prev.slice(0, -1), { id: Date.now().toString(), type: 'bot', text: 'No direct buses found.\n[🔴 RedBus](https://www.redbus.in) | [🟠 AbhiBus](https://www.abhibus.com)', isMarkdown: true }]);
+          }
+        } catch (e) {
+          setMessages(prev => [...prev.slice(0, -1), { id: Date.now().toString(), type: 'bot', text: '🚨 Server unreachable. Please ensure the backend is running.', isMarkdown: true }]);
+        }
+      }, 2000);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getModeIcon = (mode: string | null | undefined) => {
-    if (!mode) return <Sparkles size={16} />;
-    switch (mode.toLowerCase()) {
-      case 'flight': return <Plane size={16} />;
-      case 'bus': return <Bus size={16} />;
-      case 'train': return <Train size={16} />;
-      default: return <Sparkles size={16} />;
-    }
-  };
+  const getModeColor = (_mode: string | null | undefined): string => '#34d399';
 
-  const getModeColor = (mode: string | null | undefined): string => {
-    if (!mode) return '#a5b4fc';
-    switch (mode.toLowerCase()) {
-      case 'flight': return '#60a5fa';
-      case 'bus': return '#34d399';
-      case 'train': return '#f59e0b';
-      default: return '#a5b4fc';
-    }
-  };
-
-  // Render markdown-like text
   const renderText = (text: string) => {
     const parts = text.split('\n');
     return parts.map((line, i) => {
-      // Bold **text**
       let rendered = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      // Italic *text*
       rendered = rendered.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      // BUG FIX: render markdown links [text](url) as real clickable anchor tags
+      rendered = rendered.replace(
+        /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#a5b4fc;text-decoration:underline;text-underline-offset:2px;">$1</a>'
+      );
       return <span key={i} dangerouslySetInnerHTML={{ __html: rendered + (i < parts.length - 1 ? '<br/>' : '') }} />;
     });
   };
-
-  // Get primary display value for a ticket (operator/airline/train)
-  const getTicketLabel = (ticket: TicketResult): string => {
-    return ticket.operator || ticket.airline || ticket.train || 'Unknown';
-  };
-
-  const getTicketSubLabel = (ticket: TicketResult): string => {
-    return ticket.type || ticket.number || ticket.stops || '';
-  };
-
-  const getTicketPrice = (ticket: TicketResult): string => {
-    return ticket.price || ticket.fare || '--';
-  };
-
-  const getTicketDeparture = (ticket: TicketResult): string => {
-    return ticket.departure || '--';
-  };
-
-  const getTicketArrival = (ticket: TicketResult): string => {
-    return ticket.arrival || '--';
-  };
-
-  const getTicketDuration = (ticket: TicketResult): string => {
-    return ticket.duration || '--';
-  };
-
-  const comparisonHighlights = React.useMemo(() => {
-    if (!tickets || tickets.length === 0 || intent?.mode !== 'all') {
-      return null;
-    }
-
-    const parseDurationToMinutes = (durStr: string): number => {
-      if (!durStr || durStr === '--') return 999999;
-      try {
-        let hours = 0;
-        let minutes = 0;
-        const hrMatch = durStr.match(/(\d+)\s*h/i);
-        const minMatch = durStr.match(/(\d+)\s*m/i);
-        if (hrMatch) hours = parseInt(hrMatch[1], 10);
-        if (minMatch) minutes = parseInt(minMatch[1], 10);
-        return hours * 60 + minutes;
-      } catch (e) {
-        return 999999;
-      }
-    };
-
-    const parsePriceToInt = (priceStr: string): number => {
-      if (!priceStr || priceStr === '--') return 999999;
-      try {
-        const clean = priceStr.replace(/[^\d]/g, '');
-        return clean ? parseInt(clean, 10) : 999999;
-      } catch (e) {
-        return 999999;
-      }
-    };
-
-    let cheapest = tickets[0];
-    let fastest = tickets[0];
-    let minPrice = parsePriceToInt(getTicketPrice(cheapest));
-    let minDuration = parseDurationToMinutes(getTicketDuration(fastest));
-
-    for (let i = 1; i < tickets.length; i++) {
-      const t = tickets[i];
-      const p = parsePriceToInt(getTicketPrice(t));
-      const d = parseDurationToMinutes(getTicketDuration(t));
-
-      if (p < minPrice) {
-        minPrice = p;
-        cheapest = t;
-      }
-      if (d < minDuration) {
-        minDuration = d;
-        fastest = t;
-      }
-    }
-
-    return { cheapest, fastest };
-  }, [tickets, intent]);
 
   const toggleSaveTicket = (ticket: TicketResult) => {
     const isSaved = savedTickets.some(t => t.price === ticket.price && t.departure === ticket.departure && t.operator === ticket.operator);
@@ -414,22 +555,42 @@ function App() {
     }
   };
 
-  const filteredTickets = activeTab === 'saved' ? savedTickets : tickets.filter(ticket => {
-    if (activeTab === 'all') return true;
-    const ticketMode = ticket.mode || intent?.mode || 'bus';
-    return ticketMode === activeTab;
-  });
+  const applyFilters = (tks: TicketResult[]) => {
+    // The backend now handles the smart filters. We just return the tickets here.
+    return tks;
+  };
 
-  const hasResults = tickets.length > 0 || savedTickets.length > 0;
+  const getFilterLabel = (f: string) => {
+    const labels: Record<string,string> = {
+      cheapest: '💰 Cheapest First',
+      ac:       '❄️ AC Buses Only',
+      sleeper:  '🛏️ Sleepers Only',
+      non_ac:   '🚌 Non-AC Only',
+      volvo:    '✨ Volvo/Luxury',
+      fastest:  '⚡ Fastest First',
+      night:    '🌙 Night Buses Only',
+    };
+    return labels[f] || f;
+  };
+
+  const filteredTickets = activeTab === 'saved' ? savedTickets : applyFilters(tickets);
+  const hasResults = tickets.length > 0 || savedTickets.length > 0 || connectingRouteData;
   const intentSource = intent?.source || intent?.origin || null;
   const modeColor = getModeColor(intent?.mode);
 
+  // Handle "Explore {destination}" button click from chat
+  const handleExploreDestination = (dest: string) => {
+    setResultPanelTab('guide');
+    fetchTravelGuide(dest);
+    // If no results panel open, open it
+    if (!hasResults) {
+      // Just show the guide panel by triggering a dummy ticket state
+      // We'll handle this by having a travelGuide-only mode
+    }
+  };
+
   if (isCheckingAuth) {
-    return (
-      <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: '#f9fafb' }}>
-        <Loader2 className="animate-spin" size={40} color="#4f46e5" />
-      </div>
-    );
+    return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', background: '#f9fafb' }}><Loader2 className="animate-spin" size={40} color="#4f46e5" /></div>;
   }
 
   if (!user) {
@@ -447,562 +608,235 @@ function App() {
             </button>
           </div>
         </header>
-
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(124, 58, 237, 0.05) 100%)', padding: '20px', textAlign: 'center' }}>
           <div style={{ background: 'white', padding: '40px', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.05)', maxWidth: '500px', width: '100%' }}>
             <Bot size={64} color="#4f46e5" style={{ margin: '0 auto 20px auto' }} />
             <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#1f2937', marginBottom: '16px' }}>Welcome to AI Travel Assistant</h2>
-            <p style={{ fontSize: '16px', color: '#6b7280', marginBottom: '32px', lineHeight: 1.5 }}>
-              Sign in to start chatting with your personal AI travel agent. Discover the best routes, cheapest flights, and fastest trains across India.
-            </p>
-            <button 
-              onClick={() => setShowAuthModal(true)}
-              className="send-button"
-              style={{ width: '100%', padding: '16px', fontSize: '16px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', borderRadius: '12px' }}
-            >
+            <p style={{ fontSize: '16px', color: '#6b7280', marginBottom: '32px', lineHeight: 1.5 }}>Sign in to start chatting with your smart bus booking companion.</p>
+            <button onClick={() => setShowAuthModal(true)} className="send-button" style={{ width: '100%', padding: '16px', fontSize: '16px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', borderRadius: '12px' }}>
               <Sparkles size={20} />
               Get Started Now
             </button>
           </div>
         </div>
-
-        <AuthModal 
-          isOpen={showAuthModal} 
-          onClose={() => setShowAuthModal(false)} 
-          onLogin={(newUser) => {
-            setUser(newUser);
-            setShowAuthModal(false);
-          }} 
-        />
+        <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onLogin={(newUser) => { setUser(newUser); setShowAuthModal(false); }} />
       </div>
     );
   }
 
+  // Whether to show the results section (bus results OR travel guide)
+  // BUG FIX: added parentheses to fix operator precedence (&&  binds tighter than ||)
+  const showResultsPanel = hasResults || ((isLoadingGuide || travelGuideData) && resultPanelTab === 'guide');
+
   return (
     <div className="app-container">
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
-        onLogin={(newUser) => {
-          setUser(newUser);
-          setShowAuthModal(false);
-        }} 
-      />
-
-      {/* Sidebar Overlay */}
-      <div 
-        className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`}
-        onClick={() => setIsSidebarOpen(false)}
-      />
-
-      {/* Sidebar */}
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onLogin={(newUser) => { setUser(newUser); setShowAuthModal(false); }} />
+      <div className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
       <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
-        <div className="sidebar-header">
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-            <Bot size={24} color="#a5b4fc" /> TicketBot
-          </h2>
-        </div>
+        <div className="sidebar-header"><h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}><Bus size={24} color="#34d399" /> AI Travel Assistant 🚌</h2></div>
         <div className="sidebar-content">
-          <button className="sidebar-btn new-chat-btn" onClick={handleNewChat}>
-            <Plus size={18} /> New Search
+          <button className="sidebar-btn new-chat-btn" onClick={handleNewChat}><Plus size={18} /> New Search</button>
+          <button className={`sidebar-btn ${showBookingHistory ? 'active' : ''}`} onClick={() => { setShowBookingHistory(true); setTickets([]); setConnectingRouteData(null); setIntent(null); if (window.innerWidth < 900) setIsSidebarOpen(false); }}>
+            <History size={18} /> My Bookings 📋 ({bookingHistory.bookings.length})
           </button>
-          <button 
-            className={`sidebar-btn ${activeTab === 'saved' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('saved');
-              setIntent(null);
-              setTickets([]);
-              if (window.innerWidth < 900) setIsSidebarOpen(false);
-            }}
-          >
-            <Bookmark size={18} fill={activeTab === 'saved' ? "currentColor" : "none"} /> Saved Tickets ({savedTickets.length})
+          <button className={`sidebar-btn ${activeTab === 'saved' ? 'active' : ''}`} onClick={() => { setActiveTab('saved'); setIntent(null); setTickets([]); if (window.innerWidth < 900) setIsSidebarOpen(false); }}>
+            <Bookmark size={18} fill={activeTab === 'saved' ? 'currentColor' : 'none'} /> Saved Tickets ({savedTickets.length})
           </button>
-
-          <div style={{ marginTop: '1rem' }}>
-            <h3 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>History</h3>
-            <div className="history-list">
-              {chatSessions.map(session => (
-                <div 
-                  key={session.id} 
-                  className={`history-item ${session.id === currentSessionId ? 'active' : ''}`}
-                  onClick={() => loadSession(session.id)}
-                >
-                  <MessageSquare size={14} />
-                  {session.title}
-                </div>
-              ))}
-            </div>
-          </div>
+          <div style={{ marginTop: '1rem' }}><h3 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>History</h3><div className="history-list">{chatSessions.map(session => (<div key={session.id} className={`history-item ${session.id === currentSessionId ? 'active' : ''}`} onClick={() => loadSession(session.id)}><MessageSquare size={14} />{session.title}</div>))}</div></div>
         </div>
         <div className="sidebar-footer">
           {user && (
             <div className="user-settings">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(to right, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 'bold', color: 'white' }}>
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'white', lineHeight: 1 }}>{user.name}</span>
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>Traveler</span>
-                </div>
-              </div>
-              <button onClick={handleLogout} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }} title="Log out">
-                <LogOut size={16} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(to right, #6366f1, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 'bold', color: 'white' }}>{user.name.charAt(0).toUpperCase()}</div><div style={{ display: 'flex', flexDirection: 'column' }}><span style={{ fontSize: '0.85rem', fontWeight: '500', color: 'white', lineHeight: 1 }}>{user.name}</span><span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>Traveler</span></div></div>
+              <button onClick={handleLogout} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '4px' }} title="Log out"><LogOut size={16} /></button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Header */}
-      <header className="header">
-        <div className="header-left">
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', marginRight: '12px' }}
-          >
-            <Menu size={24} />
-          </button>
-          <Bot className="header-icon" size={28} />
-          <h1>AI Travel Assistant</h1>
+      <header className="app-header">
+        <div className="logo-area">
+          <button onClick={() => setIsSidebarOpen(true)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Menu size={24} /></button>
+          <div className="logo-icon">🚌</div>
+          <span className="logo-text">AI Bus Assistant</span>
         </div>
-        
-        <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '16px', marginLeft: 'auto' }}>
-          {searchSummary && (
-            <div className="header-search-info" style={{ marginRight: '20px' }}>
-              {getModeIcon(searchSummary.mode)}
-              <span>{searchSummary.source} → {searchSummary.destination}</span>
-              <span className="header-divider">|</span>
-              <Calendar size={14} />
-              <span>{searchSummary.date}</span>
-            </div>
-          )}
+        <div className="header-right">
+          {searchSummary && (<div className="route-pill"><strong>{searchSummary.source}</strong> → <strong>{searchSummary.destination}</strong></div>)}
+
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="main-content">
-        {/* Chat Section */}
-        <section className={`chat-section ${hasResults ? 'has-results' : ''}`}>
+        <section className={`chat-section ${showResultsPanel || showBookingHistory ? 'has-results' : ''}`}>
           <div className="chat-messages">
             {messages.map((msg) => (
               <div key={msg.id} className={`message ${msg.type}`}>
-                <div className="avatar">
-                  {msg.type === 'user' ? <User size={20} color="white" /> : <Bot size={20} color="#a5b4fc" />}
-                </div>
+                <div className="avatar">{msg.type === 'user' ? <User size={20} color="white" /> : <Bot size={20} color="#a5b4fc" />}</div>
                 <div className="message-bubble">
-                  {msg.isMarkdown ? renderText(msg.text) : msg.text}
+                  {msg.isMarkdown && typeof msg.text === 'string' ? renderText(msg.text) : msg.text}
+                  {msg.showExploreBtn && msg.exploreDest && (
+                    <div>
+                      <button
+                        className="explore-dest-btn"
+                        onClick={() => handleExploreDestination(msg.exploreDest!)}
+                        id={`explore-btn-${msg.id}`}
+                      >
+                        <Map size={16} />
+                        🗺️ Explore {msg.exploreDest}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
-
-            {/* Suggested Quick Actions */}
-            {suggestedQueries.length > 0 && !isLoading && (
-              <div className="suggestions-container">
-                {suggestedQueries.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    className="suggestion-chip"
-                    onClick={() => handleSuggestionClick(suggestion)}
-                  >
-                    <Sparkles size={14} />
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {isLoading && (
-              <div className="message bot">
-                <div className="avatar">
-                  <Bot size={20} color="#a5b4fc" />
-                </div>
-                <div className="message-bubble loading-bubble">
-                  <div className="loading-dots">
-                    <div className="dot"></div>
-                    <div className="dot"></div>
-                    <div className="dot"></div>
-                  </div>
-                  <div className="loading-text">
-                    🔍 Scanning live websites... this may take up to 30 seconds
-                  </div>
-                </div>
-              </div>
-            )}
+            {suggestedQueries.length > 0 && !isLoading && (<div className="suggestions-container">{suggestedQueries.map((suggestion, idx) => (<button key={idx} className="suggestion-chip" onClick={() => handleSuggestionClick(suggestion)}><Sparkles size={14} />{suggestion}</button>))}</div>)}
+            {isLoading && (<div className="message bot"><div className="avatar"><Bot size={20} color="#a5b4fc" /></div><div className="message-bubble loading-bubble"><div className="loading-dots"><div className="dot"></div><div className="dot"></div><div className="dot"></div></div><div className="loading-text">🔍 Scanning live websites...</div></div></div>)}
             <div ref={messagesEndRef} />
           </div>
-
           <div className="input-area">
             <form onSubmit={handleSubmit} className="input-container">
-              <input
-                type="text"
-                className="chat-input"
-                placeholder="Ask about buses, flights, or trains..."
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={isLoading}
-              />
-              <button
-                type="submit"
-                className="send-button"
-                disabled={!input.trim() || isLoading}
-              >
-                {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-              </button>
+              <input type="text" className="chat-input" placeholder="Search for bus tickets... 🚌" value={input} onChange={(e) => setInput(e.target.value)} disabled={isLoading} />
+              {voice.isSupported && (<button type="button" className={`mic-button ${voice.isListening ? 'listening' : ''}`} onClick={() => { if (voice.isListening) { voice.stopListening(); } else { voice.clearTranscript(); voice.startListening(); } }} disabled={isLoading} title={voice.isListening ? 'Stop listening' : 'Start voice input'}>{voice.isListening ? <MicOff size={18} /> : <Mic size={18} />}</button>)}
+              <button type="submit" className="send-button" disabled={!input.trim() || isLoading}>{isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}</button>
             </form>
+            {(voice.isListening || voice.interimTranscript) && (<div className="transcript-preview"><Mic size={14} className={voice.isListening ? 'animate-pulse' : ''} /><span>{voice.interimTranscript || 'Listening...'}</span></div>)}
           </div>
         </section>
 
-        {/* Results Section — Card-based */}
-        {hasResults && (
+        {showBookingHistory ? (
           <section className="results-section">
-            {/* Results Header */}
-            <div className="results-header">
-              <div>
-                <h2>
-                  {intent?.mode === 'all' ? <Sparkles className="header-icon" size={20} /> : getModeIcon(intent?.mode)} 
-                  {intent?.mode === 'all' ? ' Travel Comparison' : ` Available ${intent?.mode?.charAt(0).toUpperCase()}${intent?.mode?.slice(1) || ''} Options`}
-                </h2>
-                <p className="results-subtitle">
-                  {intent?.mode === 'all' ? `${tickets.length} options comparing Flights, Trains & Buses` : `${tickets.length} results from `}
-                  {intent?.mode !== 'all' && <span className="source-label">{dataSource}</span>}
-                  {activeTab === 'saved' && <span> (Showing Saved Tickets)</span>}
-                </p>
-              </div>
-              {bookingUrl && intent?.mode !== 'all' && (
-                <a
-                  href={bookingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="view-all-btn"
-                >
-                  View all on {dataSource} <ExternalLink size={14} />
-                </a>
-              )}
+            <BookingHistory
+              upcoming={bookingHistory.getUpcoming()}
+              past={bookingHistory.getPast()}
+              monthlyStats={bookingHistory.getMonthlyStats()}
+              onCancel={(id) => bookingHistory.cancelBooking(id)}
+              onRebook={(booking) => { setShowBookingHistory(false); setInput(`Bus from ${booking.from} to ${booking.to} tomorrow`); }}
+              onRate={(booking) => { setReviewBooking(booking); setShowReviewModal(true); }}
+              hasReviewed={(id) => reviews.hasReviewed(id)}
+              onClose={() => setShowBookingHistory(false)}
+            />
+          </section>
+        ) : connectingRouteData ? (
+          <section className="results-section">
+            <ConnectingRoute
+              source={connectingRouteData.source}
+              intermediate={connectingRouteData.intermediate}
+              destination={connectingRouteData.destination}
+              leg1={connectingRouteData.leg1}
+              leg2={connectingRouteData.leg2}
+              totalDuration={connectingRouteData.total_duration}
+              totalCost={connectingRouteData.total_cost}
+              onBookBoth={() => { if (connectingRouteData.leg1?.booking_url) window.open(connectingRouteData.leg1.booking_url, '_blank'); if (connectingRouteData.leg2?.booking_url) window.open(connectingRouteData.leg2.booking_url, '_blank'); }}
+            />
+          </section>
+        ) : (hasResults || isLoadingGuide || travelGuideData) && (
+          <section className="results-section">
+            {/* ── Panel Tabs ── */}
+            <div className="results-panel-tabs">
+              <button
+                id="bus-results-tab"
+                className={`panel-tab-btn ${resultPanelTab === 'buses' ? 'active' : ''}`}
+                onClick={() => setResultPanelTab('buses')}
+              >
+                <Bus size={15} /> Bus Results {tickets.length > 0 && `(${tickets.length})`}
+              </button>
+              <button
+                id="travel-guide-tab"
+                className={`panel-tab-btn ${resultPanelTab === 'guide' ? 'guide-active' : ''}`}
+                onClick={() => {
+                  setResultPanelTab('guide');
+                  const dest = searchSummary?.destination || currentGuideDest;
+                  if (dest) fetchTravelGuide(dest);
+                }}
+              >
+                <Map size={15} /> 🗺️ Travel Guide {currentGuideDest && `· ${currentGuideDest}`}
+              </button>
             </div>
 
-            {/* Route & Date Badges */}
-            {intent && (
-              <div className="intent-badges">
-                {intentSource && intent.destination && (
-                  <div className="badge route-badge" style={{ borderColor: `${modeColor}40` }}>
-                    <MapPin size={14} style={{ color: modeColor }} />
-                    {intentSource} <ArrowRight size={12} /> {intent.destination}
+            {/* ── Bus Results Tab ── */}
+            {resultPanelTab === 'buses' && (
+              <>
+                <div className="results-header">
+                  <div><h2><Bus size={20} /> Available Bus Options</h2><p className="results-subtitle">{tickets.length} results found{activeTab === 'saved' && <span> (Showing Saved Tickets)</span>}</p></div>
+                  {bookingUrl && (<a href={bookingUrl} target="_blank" rel="noopener noreferrer" className="view-all-btn">View all on Booking Site <ExternalLink size={14} /></a>)}
+                </div>
+                {intent && (<div className="intent-badges">{intentSource && intent.destination && (<div className="badge route-badge" style={{ borderColor: `${modeColor}40` }}><MapPin size={14} style={{ color: modeColor }} />{intentSource} <ArrowRight size={12} /> {intent.destination}</div>)}{intent.date && (<div className="badge date-badge" style={{ borderColor: `${modeColor}40` }}><Calendar size={14} style={{ color: modeColor }} />{intent.date}</div>)}</div>)}
+                {savedTickets.length > 0 && (<div className="filter-tabs"><button className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`} onClick={() => { setActiveTab('all'); setExpandedTicket(null); }}>🚌 Results ({tickets.length})</button><button className={`tab-btn ${activeTab === 'saved' ? 'active' : ''}`} onClick={() => { setActiveTab('saved'); setExpandedTicket(null); }}>🔖 Saved ({savedTickets.length})</button></div>)}
+                {activeTab === 'all' && activeFilter && (
+                  <div className="filter-active-badge" data-filter={activeFilter}>
+                    {getFilterLabel(activeFilter)}
+                    <span className="result-count">{tickets.length} buses</span>
+                    <button className="clear-filter-btn" onClick={() => { setActiveFilter(null); setSortBy('departure_asc'); }}>✕ Clear</button>
                   </div>
                 )}
-                {intent.date && (
-                  <div className="badge date-badge" style={{ borderColor: `${modeColor}40` }}>
-                    <Calendar size={14} style={{ color: modeColor }} />
-                    {intent.date}
+                <div className="ticket-cards">
+                  {filteredTickets.map((ticket, idx) => (
+                    <TicketCard
+                      key={idx}
+                      ticket={ticket}
+                      activeFilter={activeFilter}
+                      cardIndex={idx}
+                      intentSource={searchSummary?.source || ''}
+                      intentDest={searchSummary?.destination || ''}
+                      isExpanded={expandedTicket === idx}
+                      onToggleExpand={() => setExpandedTicket(expandedTicket === idx ? null : idx)}
+                      isSaved={savedTickets.some(t => t.price === ticket.price && t.departure === ticket.departure && t.operator === ticket.operator)}
+                      onToggleSave={() => toggleSaveTicket(ticket)}
+                      operatorRating={reviews.getOperatorRating(ticket.operator || '')}
+                      onBook={(selectedSeats, totalAmount) => {
+                        const booking = bookingHistory.addBooking(ticket, searchSummary?.source || '', searchSummary?.destination || '', searchSummary?.date || '', selectedSeats, totalAmount);
+                        prefs.logBooking(searchSummary?.source || '', searchSummary?.destination || '', ticket.operator || '', totalAmount);
+                        setMessages(prev => [...prev, { id: Date.now().toString(), type: 'bot', text: `🎫 **Booking Confirmed!** ${booking.id}\n\n🚌 ${booking.operator} • ${booking.busType}\n📍 ${booking.from} → ${booking.to}\n📅 ${booking.date} | ⏰ ${booking.departureTime}\n💺 Seat: ${booking.seatNumbers.join(', ')}\n💰 ₹${booking.totalAmount.toLocaleString('en-IN')}\n\nStatus: ✅ CONFIRMED`, isMarkdown: true }]);
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Explore button at bottom of bus results */}
+                {searchSummary?.destination && (
+                  <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                    <button
+                      id="explore-destination-bottom-btn"
+                      className="explore-dest-btn"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      onClick={() => {
+                        setResultPanelTab('guide');
+                        fetchTravelGuide(searchSummary.destination);
+                      }}
+                    >
+                      <Map size={18} /> 🗺️ Explore {searchSummary.destination} — Travel Guide
+                    </button>
                   </div>
                 )}
-              </div>
+              </>
             )}
 
-            {/* Comparison Highlights */}
-            {comparisonHighlights && (
-              <div className="comparison-highlights">
-                <div className="highlight-card cheapest" onClick={() => {
-                  const idx = filteredTickets.findIndex(t => t === comparisonHighlights.cheapest);
-                  if (idx !== -1) setExpandedTicket(idx);
-                }}>
-                  <div className="highlight-badge cheapest">💰 CHEAPEST OPTION</div>
-                  <div className="highlight-content">
-                    <div className="highlight-main">
-                      <span className="highlight-title">
-                        {getTicketLabel(comparisonHighlights.cheapest)}
-                      </span>
-                      <span className="highlight-mode-tag" style={{ background: `${getModeColor(comparisonHighlights.cheapest.mode)}20`, color: getModeColor(comparisonHighlights.cheapest.mode) }}>
-                        {getModeIcon(comparisonHighlights.cheapest.mode)} {comparisonHighlights.cheapest.mode?.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="highlight-details">
-                      <span className="highlight-price">{getTicketPrice(comparisonHighlights.cheapest)}</span>
-                      <span className="highlight-duration">⏱️ {getTicketDuration(comparisonHighlights.cheapest)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="highlight-card fastest" onClick={() => {
-                  const idx = filteredTickets.findIndex(t => t === comparisonHighlights.fastest);
-                  if (idx !== -1) setExpandedTicket(idx);
-                }}>
-                  <div className="highlight-badge fastest">⚡ FASTEST OPTION</div>
-                  <div className="highlight-content">
-                    <div className="highlight-main">
-                      <span className="highlight-title">
-                        {getTicketLabel(comparisonHighlights.fastest)}
-                      </span>
-                      <span className="highlight-mode-tag" style={{ background: `${getModeColor(comparisonHighlights.fastest.mode)}20`, color: getModeColor(comparisonHighlights.fastest.mode) }}>
-                        {getModeIcon(comparisonHighlights.fastest.mode)} {comparisonHighlights.fastest.mode?.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="highlight-details">
-                      <span className="highlight-price">{getTicketPrice(comparisonHighlights.fastest)}</span>
-                      <span className="highlight-duration">⏱️ {getTicketDuration(comparisonHighlights.fastest)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* AI Recommendation Box */}
-            {searchSummary?.ai_recommendation && intent?.mode === 'all' && (
-              <div className="ai-recommendation-box" style={{ background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)', padding: '20px', borderRadius: '16px', marginBottom: '24px', border: '1px solid rgba(124, 58, 237, 0.2)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                  <Bot size={20} color="#7c3aed" />
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#a5b4fc', margin: 0 }}>AI Recommendation</h3>
-                </div>
-                <p style={{ fontSize: '0.95rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.6, margin: 0 }}>
-                  {renderText(searchSummary.ai_recommendation)}
-                </p>
-              </div>
-            )}
-
-            {/* Filter Tabs */}
-            {(intent?.mode === 'all' || savedTickets.length > 0) && (
-              <div className="filter-tabs">
-                <button
-                  className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('all'); setExpandedTicket(null); }}
-                >
-                  📊 All Options ({tickets.length})
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'flight' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('flight'); setExpandedTicket(null); }}
-                  disabled={!tickets.some(t => t.mode === 'flight')}
-                >
-                  ✈️ Flights ({tickets.filter(t => t.mode === 'flight').length})
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'train' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('train'); setExpandedTicket(null); }}
-                  disabled={!tickets.some(t => t.mode === 'train')}
-                >
-                  🚆 Trains ({tickets.filter(t => t.mode === 'train').length})
-                </button>
-                <button
-                  className={`tab-btn ${activeTab === 'bus' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('bus'); setExpandedTicket(null); }}
-                  disabled={!tickets.some(t => t.mode === 'bus')}
-                >
-                  🚌 Buses ({tickets.filter(t => t.mode === 'bus').length})
-                </button>
-                {savedTickets.length > 0 && (
-                  <button
-                    className={`tab-btn ${activeTab === 'saved' ? 'active' : ''}`}
-                    onClick={() => { setActiveTab('saved'); setExpandedTicket(null); }}
-                  >
-                    🔖 Saved ({savedTickets.length})
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Content Switch: Table View for 'All' vs Card View for individual modes */}
-            {activeTab === 'all' && intent?.mode === 'all' ? (
-              <div className="modern-table-container">
-                <table className="modern-table">
-                  <thead>
-                    <tr>
-                      <th>Mode</th>
-                      <th>Operator / Details</th>
-                      <th>Departure</th>
-                      <th>Duration</th>
-                      <th>Arrival</th>
-                      <th>Price</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTickets.map((ticket, idx) => {
-                      const ticketMode = ticket.mode || 'bus';
-                      const ticketColor = getModeColor(ticketMode);
-                      return (
-                        <tr key={idx}>
-                          <td>
-                            <div className="table-mode-tag" style={{ background: `${ticketColor}20`, color: ticketColor }}>
-                              {getModeIcon(ticketMode)} {ticketMode.toUpperCase()}
-                            </div>
-                          </td>
-                          <td>
-                            <div style={{ fontWeight: 600, color: 'rgba(255, 255, 255, 0.95)' }}>{getTicketLabel(ticket)}</div>
-                            <div style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.5)' }}>{getTicketSubLabel(ticket)}</div>
-                          </td>
-                          <td style={{ fontWeight: 500, color: 'rgba(255, 255, 255, 0.85)' }}>{getTicketDeparture(ticket)}</td>
-                          <td style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem' }}><Clock size={12} style={{ display: 'inline', marginRight: '4px' }}/>{getTicketDuration(ticket)}</td>
-                          <td style={{ fontWeight: 500, color: 'rgba(255, 255, 255, 0.85)' }}>{getTicketArrival(ticket)}</td>
-                          <td>
-                            <div style={{ fontWeight: 700, color: ticketColor, fontSize: '1.05rem' }}>{getTicketPrice(ticket)}</div>
-                          </td>
-                          <td>
-                            <a href={ticket.booking_url || bookingUrl || '#'} target="_blank" rel="noopener noreferrer" className="table-book-btn" style={{ background: ticketColor }}>
-                              Book <ExternalLink size={12} style={{ marginLeft: '4px' }} />
-                            </a>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-            <div className="ticket-cards">
-              {filteredTickets.map((ticket, idx) => {
-                const isExpanded = expandedTicket === idx;
-                const label = getTicketLabel(ticket);
-                const subLabel = getTicketSubLabel(ticket);
-                const price = getTicketPrice(ticket);
-                const departure = getTicketDeparture(ticket);
-                const arrival = getTicketArrival(ticket);
-                const duration = getTicketDuration(ticket);
-
-                const ticketMode = ticket.mode || intent?.mode || 'bus';
-                const ticketColor = getModeColor(ticketMode);
-                const ticketSource = ticketMode === 'flight' ? 'Google Flights' : ticketMode === 'train' ? 'RedBus RedRail' : 'RedBus';
-                const isSaved = savedTickets.some(t => t.price === ticket.price && t.departure === ticket.departure && t.operator === ticket.operator);
-
-                return (
-                  <div
-                    key={idx}
-                    className={`ticket-card ${isExpanded ? 'expanded' : ''}`}
-                    onClick={() => setExpandedTicket(isExpanded ? null : idx)}
-                    style={{ '--mode-color': ticketColor } as React.CSSProperties}
-                  >
-                    {/* Card Header */}
-                    <div className="card-header">
-                      <div className="card-operator">
-                        <div className="operator-icon" style={{ background: `${ticketColor}20`, color: ticketColor }}>
-                          {getModeIcon(ticketMode)}
-                        </div>
-                        <div>
-                          <h3 className="operator-name">{label}</h3>
-                          {subLabel && <span className="operator-type">{subLabel}</span>}
-                        </div>
-                      </div>
-                      <div className="card-price" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                        <div>
-                          <span className="price-value">{price}</span>
-                          <span className="price-label">per person</span>
-                        </div>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleSaveTicket(ticket);
-                          }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: isSaved ? ticketColor : '#9ca3af', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 500 }}
-                          title={isSaved ? "Remove saved ticket" : "Save ticket"}
-                        >
-                          <Bookmark size={14} fill={isSaved ? ticketColor : "none"} />
-                          {isSaved ? "Saved" : "Save"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Card Timeline */}
-                    <div className="card-timeline">
-                      <div className="timeline-point">
-                        <span className="time-value">{departure}</span>
-                        <span className="time-label">Departure</span>
-                      </div>
-                      <div className="timeline-line">
-                        <div className="duration-badge">
-                          <Clock size={12} />
-                          {duration}
-                        </div>
-                      </div>
-                      <div className="timeline-point">
-                        <span className="time-value">{arrival}</span>
-                        <span className="time-label">Arrival</span>
-                      </div>
-                    </div>
-
-                    {/* Quick Info Chips */}
-                    <div className="card-chips">
-                      {ticket.seats && ticket.seats !== '--' && (
-                        <span className="info-chip">{ticket.seats}</span>
-                      )}
-                      {ticket.rating && ticket.rating !== '--' && (
-                        <span className="info-chip rating-chip">
-                          <Star size={12} /> {ticket.rating}
-                        </span>
-                      )}
-                      {ticket.stops && ticket.stops !== '--' && (
-                        <span className="info-chip">{ticket.stops}</span>
-                      )}
-                      {intent?.mode === 'all' && (
-                        <span className="info-chip" style={{ background: `${ticketColor}15`, color: ticketColor, fontWeight: 600, border: `1px solid ${ticketColor}25` }}>
-                          {ticketMode.toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Expand Indicator */}
-                    <div className="expand-indicator">
-                      {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      <span>{isExpanded ? 'Less details' : 'View details & book'}</span>
-                    </div>
-
-                    {/* Expanded Details */}
-                    {isExpanded && (
-                      <div className="card-expanded">
-                        <div className="expanded-divider" />
-
-                        {/* Full Details Grid */}
-                        <div className="details-grid">
-                          {Object.entries(ticket).map(([key, value]) => {
-                            if (key === 'booking_url' || key === 'mode' || !value || value === '--') return null;
-                            const labelMap: Record<string, string> = {
-                              operator: '🚌 Operator', airline: '✈️ Airline', train: '🚆 Train',
-                              type: '📋 Type', number: '#️⃣ Number', departure: '🕐 Departure',
-                              arrival: '🕐 Arrival', duration: '⏱️ Duration', price: '💰 Price',
-                              seats: '💺 Seats', rating: '⭐ Rating', stops: '🔄 Stops',
-                              fare: '💰 Fare',
-                            };
-                            return (
-                              <div key={key} className="detail-item">
-                                <span className="detail-label">{labelMap[key] || key}</span>
-                                <span className="detail-value">{value}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Travel Tips */}
-                        <div className="travel-tips">
-                          <h4>💡 Travel Tips</h4>
-                          <ul>
-                            <li>Carry a valid government photo ID</li>
-                            <li>Arrive at the station/airport at least 30 minutes early</li>
-                            <li>Download the {ticketSource} app for e-tickets</li>
-                          </ul>
-                        </div>
-
-                        {/* Booking Button */}
-                        {ticket.booking_url && (
-                          <a
-                            href={ticket.booking_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="book-button"
-                            style={{ background: `linear-gradient(135deg, ${ticketColor}, ${ticketColor}cc)` }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Book on {ticketSource}
-                            <ExternalLink size={16} />
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            {/* ── Travel Guide Tab ── */}
+            {resultPanelTab === 'guide' && (
+              <TravelGuidePanel
+                destination={currentGuideDest || searchSummary?.destination || ''}
+                data={travelGuideData}
+                isLoading={isLoadingGuide}
+              />
             )}
           </section>
         )}
       </main>
+
+      {reviewBooking && (
+        <ReviewModal
+          isOpen={showReviewModal}
+          onClose={() => { setShowReviewModal(false); setReviewBooking(null); }}
+          bookingId={reviewBooking.id}
+          operator={reviewBooking.operator}
+          route={`${reviewBooking.from} → ${reviewBooking.to}`}
+          userName={user?.name || 'Traveler'}
+          onSubmit={(bookingId, operator, route, rating, aspects, comment, userName) => {
+            reviews.addReview(bookingId, operator, route, rating, aspects, comment, userName);
+            bookingHistory.completeBooking(bookingId);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,1455 @@
+{
+  "success": true,
+  "data": {
+    "metaData": {
+      "totalCount": 168,
+      "sections": [
+        {
+          "groups": [
+            {
+              "count": 1,
+              "operatorId": 28011,
+              "displayName": "KSRTC Kerala Buses",
+              "minFare": 1591,
+              "subHeader": "\u0d15\u0d47\u0d30\u0d33 \u0d38\u0d4d\u0d31\u0d4d\u0d31\u0d47\u0d31\u0d4d\u0d31\u0d4d \u0d31\u0d4b\u0d21\u0d4d \u0d1f\u0d4d\u0d30\u0d3e\u0d7b\u0d38\u0d4d\u0d2a\u0d4b\u0d7c\u0d1f\u0d4d\u0d1f\u0d4d \u0d15\u0d4b\u0d7c\u0d2a\u0d4d\u0d2a\u0d31\u0d47\u0d37\u0d7b",
+              "concessionTags": [],
+              "persuasionTags": [],
+              "groupExpandType": 1
+            }
+          ],
+          "sectionId": 0,
+          "totalCount": 168,
+          "privateCount": 167,
+          "sectionInvCount": 168
+        }
+      ],
+      "busLogoBaseUrl": "https://origin-st.redbus.in/buslogos/country/",
+      "busImageBaseUrl": "https://s3-ap-southeast-1.amazonaws.com/rbplus/BusImage/Domestic",
+      "primoCount": 42
+    },
+    "inventories": [
+      {
+        "operatorId": 28011,
+        "travelsName": "KSRTC (Kerala)",
+        "routeId": 44806857,
+        "busType": "A/C Sleeper (2+1)",
+        "busTypeId": 54,
+        "serviceName": "KSRTC-ERNAKULAM DEPOT ",
+        "serviceId": "4796",
+        "cancellationPolicy": "0:2:100:0;2:12:50:0;12:24:40:0;24:48:25:0;48:72:10:0;72:-1:0:0",
+        "operatorLogoPath": "ind/logo/28011.png",
+        "totalRatings": 3.6,
+        "numberOfReviews": "0",
+        "departureTime": "2026-06-04 22:31:00",
+        "arrivalTime": "2026-06-05 06:41:00",
+        "journeyDurationMin": 490,
+        "firstBpTime": "2026-06-04 22:31:00",
+        "standardBpName": "L and t bypass jn, neelambur",
+        "standardBpIdentifier": 95492,
+        "standardDpName": "Kilambakkam Bus Stand\t",
+        "standardDpIdentifier": 311163,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          1591
+        ],
+        "busScore": 0.41,
+        "perzScore": 0.41,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "isRtc": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 9,
+        "availableSingleSeats": 7,
+        "availableSeats": 15,
+        "totalSeats": 36,
+        "campaignType": [
+          86
+        ],
+        "vendorCurrency": "INR",
+        "availableAisleSeats": 4,
+        "availableUpperSeats": 8,
+        "availableLowerSeats": 7,
+        "bpCount": 1,
+        "dpCount": 7,
+        "boReqParams": [
+          {}
+        ],
+        "busImageCount": -1,
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Others",
+          "destinationDp": "Kilambakkam Bus Stand\t",
+          "bpId": 24531365,
+          "dpId": 24846724
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 1,
+          "wtPrice": 1591,
+          "seatPrices": "1591.0:15",
+          "compRids": "",
+          "compSids": ""
+        },
+        "concessionTags": [],
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 1591,
+              "count": 15
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 32055,
+        "travelsName": "THAMARAI BUS TRANSPORTS",
+        "routeId": 37584559,
+        "busType": "Bharat Benz A/C Sleeper (2+1)",
+        "busTypeId": 1087,
+        "serviceName": "CBE - CHN (OMR Route)",
+        "serviceId": "SCH578750G",
+        "cancellationPolicy": "0:4:95:0;4:8:50:0;8:-1:15:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/32055.png",
+        "totalRatings": 4.9,
+        "numberOfReviews": "1073",
+        "departureTime": "2026-06-04 21:00:00",
+        "arrivalTime": "2026-06-05 06:50:00",
+        "journeyDurationMin": 590,
+        "firstBpTime": "2026-06-04 21:05:00",
+        "standardBpName": "Omni Bus Stand",
+        "standardBpIdentifier": 70565,
+        "standardDpName": "Koyambedu",
+        "standardDpIdentifier": 66065,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          959,
+          1059,
+          1259,
+          1459
+        ],
+        "busScore": 4.99,
+        "perzScore": 4.99,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 13,
+        "availableSingleSeats": 6,
+        "availableSeats": 24,
+        "totalSeats": 36,
+        "operatorOfferCampaign": {
+          "Vld": true,
+          "CmpgList": [
+            {
+              "RouteId": 37584559,
+              "CampaignCode": "ALLC_43936d99",
+              "CampaignDesc": "Get INR 100.0 Extra OFF",
+              "CampaignNote": "[\"Minimum ticket fare : INR 130\",\"Maximum discount limit : INR 99999\"]",
+              "CampaignType": "FLAT",
+              "DiscountUnit": 100,
+              "DiscountType": 1,
+              "Discount": 100,
+              "maxDiscount": 100,
+              "DiscountedPrices": [
+                859,
+                959,
+                1159,
+                1359
+              ],
+              "OriginalPrices": [
+                959,
+                1059,
+                1259,
+                1459
+              ],
+              "SeatCount": 24,
+              "icon": "REDDEAL",
+              "IsFemaleOffer": true,
+              "oType": 3,
+              "displayText": "Exclusive",
+              "dealType": "REDDEAL"
+            }
+          ]
+        },
+        "isRescheduled": true,
+        "rescheduleTime": 7,
+        "campaignType": [
+          86,
+          7,
+          15
+        ],
+        "vendorCurrency": "INR",
+        "availableAisleSeats": 9,
+        "availableUpperSeats": 13,
+        "availableLowerSeats": 11,
+        "bpCount": 29,
+        "dpCount": 25,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:21}}",
+        "busVehicleNumber": "TN38DV1199",
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "7:-1:0:0",
+            "serviceStartTime": "2026-06-04 21:05:00"
+          }
+        ],
+        "busImageCount": -1,
+        "persuasion": {
+          "142": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 142,
+            "percentile": 82,
+            "score": 82
+          },
+          "533": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 533
+          }
+        },
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Saravanampatti",
+          "destinationDp": "Koyambedu",
+          "bpId": 26454621,
+          "dpId": 26454584
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 2,
+          "wtPrice": 1092.33,
+          "seatPrices": "959.0:10,1059.0:8,1259.0:3,1459.0:3",
+          "compRids": "",
+          "compSids": "",
+          "boostDiscPer": 9.15
+        },
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 959,
+              "discountedPrice": 859,
+              "count": 18
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1259,
+              "discountedPrice": 1159,
+              "count": 6
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 32055,
+        "travelsName": "THAMARAI BUS TRANSPORTS",
+        "routeId": 35149530,
+        "busType": "Bharat Benz A/C Sleeper (2+1)",
+        "busTypeId": 1087,
+        "serviceName": "CBE - CHE (Bypass Route) ",
+        "serviceId": "SCH47851651G",
+        "cancellationPolicy": "0:4:95:0;4:8:50:0;8:-1:15:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/32055.png",
+        "totalRatings": 4.9,
+        "numberOfReviews": "950",
+        "departureTime": "2026-06-04 21:30:00",
+        "arrivalTime": "2026-06-05 06:30:00",
+        "journeyDurationMin": 540,
+        "firstBpTime": "2026-06-04 21:30:00",
+        "standardBpName": "Omni Bus Stand",
+        "standardBpIdentifier": 70565,
+        "standardDpName": "Koyambedu",
+        "standardDpIdentifier": 66065,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          1089,
+          1189,
+          1389,
+          1589
+        ],
+        "busScore": 4.92,
+        "perzScore": 4.92,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 18,
+        "availableSingleSeats": 10,
+        "availableSeats": 29,
+        "totalSeats": 36,
+        "operatorOfferCampaign": {
+          "Vld": true,
+          "CmpgList": [
+            {
+              "RouteId": 35149530,
+              "CampaignCode": "ALLC_43936d99",
+              "CampaignDesc": "Get INR 100.0 Extra OFF",
+              "CampaignNote": "[\"Minimum ticket fare : INR 130\",\"Maximum discount limit : INR 99999\"]",
+              "CampaignType": "FLAT",
+              "DiscountUnit": 100,
+              "DiscountType": 1,
+              "Discount": 100,
+              "maxDiscount": 100,
+              "DiscountedPrices": [
+                989,
+                1089,
+                1289,
+                1489
+              ],
+              "OriginalPrices": [
+                1089,
+                1189,
+                1389,
+                1589
+              ],
+              "SeatCount": 29,
+              "icon": "REDDEAL",
+              "IsFemaleOffer": true,
+              "oType": 3,
+              "displayText": "Exclusive",
+              "dealType": "REDDEAL"
+            }
+          ]
+        },
+        "isRescheduled": true,
+        "rescheduleTime": 8,
+        "campaignType": [
+          86,
+          7,
+          15
+        ],
+        "vendorCurrency": "INR",
+        "availableAisleSeats": 9,
+        "availableUpperSeats": 14,
+        "availableLowerSeats": 15,
+        "bpCount": 27,
+        "dpCount": 15,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:25}}",
+        "busVehicleNumber": "TN38DS1199",
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "8:-1:0:0",
+            "serviceStartTime": "2026-06-04 21:30:00"
+          }
+        ],
+        "busImageCount": -1,
+        "persuasion": {
+          "142": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 142,
+            "percentile": 90,
+            "score": 90
+          },
+          "533": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 533
+          }
+        },
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Saravanampatti",
+          "destinationDp": "Koyambedu",
+          "bpId": 28863430,
+          "dpId": 25897239
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 3,
+          "wtPrice": 1261.41,
+          "seatPrices": "1089.0:9,1189.0:10,1389.0:5,1589.0:5",
+          "compRids": "",
+          "compSids": "",
+          "boostDiscPer": 7.93
+        },
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 1089,
+              "discountedPrice": 989,
+              "count": 19
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1389,
+              "discountedPrice": 1289,
+              "count": 10
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 30745,
+        "travelsName": "Delta Transports Pvt Ltd",
+        "routeId": 32268308,
+        "busType": "Bharat Benz A/C Sleeper (2+1)",
+        "busTypeId": 1093,
+        "serviceName": "CBE - CHN 02",
+        "serviceId": "SCH1A86153D",
+        "cancellationPolicy": "0:6:90:0;6:8:50:0;8:12:25:0;12:-1:15:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/30745.png",
+        "totalRatings": 4.8,
+        "numberOfReviews": "899",
+        "departureTime": "2026-06-04 20:45:00",
+        "arrivalTime": "2026-06-05 05:45:00",
+        "journeyDurationMin": 540,
+        "firstBpTime": "2026-06-04 20:45:00",
+        "standardBpName": "Omni Bus Stand",
+        "standardBpIdentifier": 70565,
+        "standardDpName": "Koyambedu",
+        "standardDpIdentifier": 66065,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          1100,
+          1200,
+          1350,
+          1450,
+          1610,
+          1710
+        ],
+        "busScore": 4.51,
+        "perzScore": 4.51,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 10,
+        "availableSingleSeats": 7,
+        "availableSeats": 17,
+        "totalSeats": 36,
+        "operatorOfferCampaign": {
+          "Vld": true,
+          "RTVld": true,
+          "CmpgList": [
+            {
+              "RouteId": 32268308,
+              "CampaignCode": "ALLC_2be1aaf4",
+              "CampaignDesc": "Get 13 % Extra OFF",
+              "CampaignNote": "[\"Minimum ticket fare : INR 750\",\"Maximum discount limit : INR 99999\"]",
+              "CampaignType": "PERCENT",
+              "DiscountUnit": 12.5,
+              "DiscountType": 2,
+              "Discount": 137,
+              "maxDiscount": 12.52,
+              "DiscountedPrices": [
+                963,
+                1050,
+                1181,
+                1269,
+                1409,
+                1496
+              ],
+              "OriginalPrices": [
+                1100,
+                1200,
+                1350,
+                1450,
+                1610,
+                1710
+              ],
+              "SeatCount": 17,
+              "RTODiscountType": 1,
+              "RTOOffer": "10",
+              "RTOType": 1,
+              "RTODays": 15,
+              "icon": "REDDEAL",
+              "IsFemaleOffer": true,
+              "oType": 1,
+              "displayText": "Exclusive",
+              "dealType": "REDDEAL",
+              "groupSeatCount": 3,
+              "redDealInfo": {
+                "1": {
+                  "DiscountUnit": 10,
+                  "DiscountType": 2
+                },
+                "4": {
+                  "DiscountUnit": 10,
+                  "DiscountType": 2
+                }
+              }
+            }
+          ]
+        },
+        "isRescheduled": true,
+        "rescheduleTime": 8,
+        "campaignType": [
+          16,
+          86,
+          7,
+          555,
+          15
+        ],
+        "vendorCurrency": "INR",
+        "programList": [
+          3
+        ],
+        "availableAisleSeats": 5,
+        "availableUpperSeats": 13,
+        "availableLowerSeats": 4,
+        "bpCount": 24,
+        "dpCount": 30,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:18}}",
+        "busVehicleNumber": "TN38DL9883",
+        "sponsoredAttribute": {
+          "trackingId": "PYQ31GKLW68_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzExMjczNixhZEl0ZW1JZDsyNDIxNTYsNjQ4NjgyNQ==",
+          "clickUrl": "https://adengine.redbus.com/ext/user/track?type=CLICK&trackingId=PYQ31GKLW68_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzExMjczNixhZEl0ZW1JZDsyNDIxNTYsNjQ4NjgyNQ==",
+          "viewUrl": "https://adengine.redbus.com/ext/user/track?type=VIEW&trackingId=PYQ31GKLW68_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzExMjczNixhZEl0ZW1JZDsyNDIxNTYsNjQ4NjgyNQ=="
+        },
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "8:-1:0:0",
+            "serviceStartTime": "2026-06-04 20:45:00"
+          }
+        ],
+        "busImageCount": -1,
+        "persuasion": {
+          "142": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 142,
+            "percentile": 85,
+            "score": 85
+          }
+        },
+        "rs555": true,
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Saravanampatti",
+          "destinationDp": "Velachery",
+          "bpId": 25078545,
+          "dpId": 27111944
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "3,2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 8,
+          "isBoosted": true,
+          "wtPrice": 1460,
+          "seatPrices": "1100.0:2,1200.0:1,1350.0:5,1450.0:2,1610.0:2,1710.0:5",
+          "compRids": "",
+          "compSids": "",
+          "boostDiscPer": 12.5
+        },
+        "inventoryTags": [
+          "OTG_ADDON"
+        ],
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 1100,
+              "discountedPrice": 963,
+              "count": 10
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1610,
+              "discountedPrice": 1409,
+              "count": 7
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 32055,
+        "travelsName": "THAMARAI BUS TRANSPORTS",
+        "routeId": 47325356,
+        "busType": "Bharat Benz A/C Sleeper (2+1)",
+        "busTypeId": 1087,
+        "serviceName": "CBE - CHN (City Route) ",
+        "serviceId": "SCH2A872419E",
+        "cancellationPolicy": "0:4:95:0;4:8:50:0;8:-1:15:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/32055.png",
+        "totalRatings": 4.9,
+        "numberOfReviews": "954",
+        "departureTime": "2026-06-04 20:30:00",
+        "arrivalTime": "2026-06-05 05:30:00",
+        "journeyDurationMin": 540,
+        "firstBpTime": "2026-06-04 20:30:00",
+        "standardBpName": "Omni Bus Stand",
+        "standardBpIdentifier": 70565,
+        "standardDpName": "Koyambedu",
+        "standardDpIdentifier": 66065,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          1069,
+          1169,
+          1379,
+          1609
+        ],
+        "busScore": 4.92,
+        "perzScore": 4.92,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 8,
+        "availableSingleSeats": 3,
+        "availableSeats": 15,
+        "totalSeats": 36,
+        "operatorOfferCampaign": {
+          "Vld": true,
+          "CmpgList": [
+            {
+              "RouteId": 47325356,
+              "CampaignCode": "ALLC_43936d99",
+              "CampaignDesc": "Get INR 100.0 Extra OFF",
+              "CampaignNote": "[\"Minimum ticket fare : INR 130\",\"Maximum discount limit : INR 99999\"]",
+              "CampaignType": "FLAT",
+              "DiscountUnit": 100,
+              "DiscountType": 1,
+              "Discount": 100,
+              "maxDiscount": 100,
+              "DiscountedPrices": [
+                969,
+                1069,
+                1279,
+                1509
+              ],
+              "OriginalPrices": [
+                1069,
+                1169,
+                1379,
+                1609
+              ],
+              "SeatCount": 15,
+              "icon": "REDDEAL",
+              "IsFemaleOffer": true,
+              "oType": 3,
+              "displayText": "Exclusive",
+              "dealType": "REDDEAL"
+            }
+          ]
+        },
+        "isRescheduled": true,
+        "rescheduleTime": 8,
+        "campaignType": [
+          86,
+          7,
+          15
+        ],
+        "vendorCurrency": "INR",
+        "availableAisleSeats": 5,
+        "availableUpperSeats": 8,
+        "availableLowerSeats": 7,
+        "bpCount": 29,
+        "dpCount": 24,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:21}}",
+        "busVehicleNumber": "TN38DY1199",
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "8:-1:0:0",
+            "serviceStartTime": "2026-06-04 20:30:00"
+          }
+        ],
+        "busImageCount": -1,
+        "persuasion": {
+          "142": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 142,
+            "percentile": 89,
+            "score": 89
+          },
+          "533": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 533
+          }
+        },
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Saravanampatti",
+          "destinationDp": "Koyambedu",
+          "bpId": 25897268,
+          "dpId": 26454584
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 4,
+          "wtPrice": 1186.33,
+          "seatPrices": "1069.0:6,1169.0:6,1379.0:2,1609.0:1",
+          "compRids": "",
+          "compSids": "",
+          "boostDiscPer": 8.43
+        },
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 1069,
+              "discountedPrice": 969,
+              "count": 12
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1379,
+              "discountedPrice": 1279,
+              "count": 3
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 33620,
+        "travelsName": "JUBILE TRAVELS",
+        "routeId": 46025457,
+        "busType": "Bharat Benz A/C Sleeper (2+1)",
+        "busTypeId": 1087,
+        "serviceName": "CBE TO CHN Night OMR",
+        "serviceId": "SCH398C5N",
+        "cancellationPolicy": "0:6:95:0;6:12:50:0;12:-1:25:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/33620.png",
+        "totalRatings": 4.3,
+        "numberOfReviews": "223",
+        "departureTime": "2026-06-04 21:00:00",
+        "arrivalTime": "2026-06-05 06:50:00",
+        "journeyDurationMin": 590,
+        "firstBpTime": "2026-06-04 21:00:00",
+        "standardBpName": "Omni Bus Stand",
+        "standardBpIdentifier": 70565,
+        "standardDpName": "Koyambedu",
+        "standardDpIdentifier": 66065,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          939,
+          969,
+          1019,
+          1119,
+          1219
+        ],
+        "busScore": 2.64,
+        "perzScore": 2.64,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 12,
+        "availableSingleSeats": 6,
+        "availableSeats": 22,
+        "totalSeats": 36,
+        "operatorOfferCampaign": {
+          "Vld": true,
+          "CmpgList": [
+            {
+              "RouteId": 46025457,
+              "CampaignCode": "ALLC_d7120d83",
+              "CampaignDesc": "Get INR 100.0 Extra OFF",
+              "CampaignNote": "[\"Minimum ticket fare : INR 130\",\"Maximum discount limit : INR 99999\"]",
+              "CampaignType": "FLAT",
+              "DiscountUnit": 100,
+              "DiscountType": 1,
+              "Discount": 100,
+              "maxDiscount": 100,
+              "DiscountedPrices": [
+                839,
+                869,
+                919,
+                1019,
+                1119
+              ],
+              "OriginalPrices": [
+                939,
+                969,
+                1019,
+                1119,
+                1219
+              ],
+              "SeatCount": 20,
+              "icon": "REDDEAL",
+              "IsFemaleOffer": true,
+              "oType": 3,
+              "displayText": "Exclusive",
+              "dealType": "REDDEAL"
+            }
+          ]
+        },
+        "isRescheduled": true,
+        "rescheduleTime": 6,
+        "campaignType": [
+          86,
+          7,
+          555,
+          15
+        ],
+        "vendorCurrency": "INR",
+        "programList": [
+          3
+        ],
+        "availableAisleSeats": 8,
+        "availableUpperSeats": 12,
+        "availableLowerSeats": 10,
+        "bpCount": 14,
+        "dpCount": 26,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:17}}",
+        "busVehicleNumber": "TN42AW2499",
+        "sponsoredAttribute": {
+          "trackingId": "PNG41MKZWMQ_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzEwNTE5NCxhZEl0ZW1JZDsyMjYwMjgsNDc3NzI5NzM4",
+          "clickUrl": "https://adengine.redbus.com/ext/user/track?type=CLICK&trackingId=PNG41MKZWMQ_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzEwNTE5NCxhZEl0ZW1JZDsyMjYwMjgsNDc3NzI5NzM4",
+          "viewUrl": "https://adengine.redbus.com/ext/user/track?type=VIEW&trackingId=PNG41MKZWMQ_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzEwNTE5NCxhZEl0ZW1JZDsyMjYwMjgsNDc3NzI5NzM4"
+        },
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "6:-1:0:0",
+            "serviceStartTime": "2026-06-04 21:00:00"
+          }
+        ],
+        "busImageCount": -1,
+        "persuasion": {
+          "74": {
+            "priority": 8,
+            "tagCategory": 2,
+            "id": 74
+          }
+        },
+        "rs555": true,
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Omni Bus Stand",
+          "destinationDp": "Maduravoyal",
+          "bpId": 26691898,
+          "dpId": 28081007
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "3,2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 78,
+          "wtPrice": 1019,
+          "seatPrices": "939.0:5,969.0:6,1019.0:6,1119.0:3,1219.0:2",
+          "compRids": "",
+          "compSids": "",
+          "boostDiscPer": 9.81
+        },
+        "inventoryTags": [
+          "OTG_ADDON",
+          "PRAVAS_WIN"
+        ],
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 939,
+              "discountedPrice": 839,
+              "count": 17
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1119,
+              "discountedPrice": 1019,
+              "count": 5
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 29521,
+        "travelsName": "SVT TRANZ",
+        "routeId": 47550387,
+        "busType": "Bharat Benz A/C Sleeper (2+1)",
+        "busTypeId": 1086,
+        "serviceName": "",
+        "serviceId": "22",
+        "cancellationPolicy": "0:6:100:0;6:12:50:0;12:24:20:0;24:-1:0:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/29521.png",
+        "totalRatings": 4.9,
+        "numberOfReviews": "905",
+        "departureTime": "2026-06-04 21:25:00",
+        "arrivalTime": "2026-06-05 07:30:00",
+        "journeyDurationMin": 605,
+        "firstBpTime": "2026-06-04 21:25:00",
+        "standardBpName": "Gandhipuram",
+        "standardBpIdentifier": 66904,
+        "standardDpName": "Vadapalani",
+        "standardDpIdentifier": 66338,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          1099,
+          1299,
+          1444,
+          1567
+        ],
+        "busScore": 4.88,
+        "perzScore": 4.88,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 10,
+        "availableSingleSeats": 6,
+        "availableSeats": 18,
+        "totalSeats": 36,
+        "isRescheduled": true,
+        "rescheduleTime": 8,
+        "campaignType": [
+          86
+        ],
+        "vendorCurrency": "INR",
+        "availableAisleSeats": 6,
+        "availableUpperSeats": 11,
+        "availableLowerSeats": 7,
+        "bpCount": 17,
+        "dpCount": 22,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:19}}",
+        "busVehicleNumber": "TN38DU7779",
+        "manualReschedulePolicy": "8:-1:0:0",
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "8:-1:0:0",
+            "serviceStartTime": "2026-06-04 21:25:00"
+          }
+        ],
+        "busImageCount": -1,
+        "persuasion": {
+          "142": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 142,
+            "percentile": 97,
+            "score": 97
+          }
+        },
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Saravanampatti",
+          "destinationDp": "Koyambedu",
+          "bpId": 24540385,
+          "dpId": 24552078
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 5,
+          "wtPrice": 1278.94,
+          "seatPrices": "1099.0:8,1299.0:4,1444.0:3,1567.0:3",
+          "compRids": "",
+          "compSids": ""
+        },
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 1099,
+              "count": 12
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1444,
+              "count": 6
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 18936,
+        "travelsName": "PSS Transport",
+        "routeId": 25642192,
+        "busType": "A/C Sleeper (2+1)",
+        "busTypeId": 54,
+        "serviceName": "CBE TO CHE ",
+        "serviceId": "SCH288B848L",
+        "cancellationPolicy": "0:4:100:0;4:12:75:0;12:24:50:0;24:48:25:0;48:-1:15:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/18936.png",
+        "totalRatings": 3.9,
+        "numberOfReviews": "515",
+        "departureTime": "2026-06-04 21:30:00",
+        "arrivalTime": "2026-06-05 06:50:00",
+        "journeyDurationMin": 560,
+        "firstBpTime": "2026-06-04 21:30:00",
+        "standardBpName": "Omni Bus Stand",
+        "standardBpIdentifier": 70565,
+        "standardDpName": "Koyambedu",
+        "standardDpIdentifier": 66065,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          820,
+          1020,
+          1150,
+          1210
+        ],
+        "busScore": 2.25,
+        "perzScore": 2.25,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 13,
+        "availableSingleSeats": 6,
+        "availableSeats": 19,
+        "totalSeats": 36,
+        "operatorOfferCampaign": {
+          "Vld": true,
+          "CmpgList": [
+            {
+              "RouteId": 25642192,
+              "CampaignCode": "MULF_74dfc8ee",
+              "CampaignDesc": "Get 10 % Extra OFF",
+              "CampaignNote": "[\"Minimum ticket fare : INR 300\",\"Maximum discount limit : INR 99999\"]",
+              "CampaignType": "PERCENT",
+              "DiscountUnit": 10,
+              "DiscountType": 2,
+              "Discount": 82,
+              "maxDiscount": 10,
+              "DiscountedPrices": [
+                738,
+                918,
+                1035,
+                1089
+              ],
+              "OriginalPrices": [
+                820,
+                1020,
+                1150,
+                1210
+              ],
+              "SeatCount": 19,
+              "isLoggedIn": true,
+              "icon": "DISCOVERY",
+              "displayText": "Try new",
+              "dealType": "DISCOVERY"
+            }
+          ]
+        },
+        "isRescheduled": true,
+        "rescheduleTime": 8,
+        "campaignType": [
+          4,
+          86,
+          15
+        ],
+        "vendorCurrency": "INR",
+        "availableAisleSeats": 6,
+        "availableUpperSeats": 11,
+        "availableLowerSeats": 8,
+        "bpCount": 11,
+        "dpCount": 32,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:16}}",
+        "busVehicleNumber": "NL01B1189",
+        "sponsoredAttribute": {
+          "trackingId": "PP5Z7Q22WM9_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzExMzcyNixhZEl0ZW1JZDsyNDQyMzksNDU5NzU3OTE4",
+          "clickUrl": "https://adengine.redbus.com/ext/user/track?type=CLICK&trackingId=PP5Z7Q22WM9_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzExMzcyNixhZEl0ZW1JZDsyNDQyMzksNDU5NzU3OTE4",
+          "viewUrl": "https://adengine.redbus.com/ext/user/track?type=VIEW&trackingId=PP5Z7Q22WM9_dHJhY2tlcixTTCxsaW5lSXRlbUlkOzExMzcyNixhZEl0ZW1JZDsyNDQyMzksNDU5NzU3OTE4"
+        },
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "8:-1:0:0",
+            "serviceStartTime": "2026-06-04 21:30:00"
+          }
+        ],
+        "busImageCount": -1,
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Omni Bus Stand",
+          "destinationDp": "Koyambedu",
+          "bpId": 19404653,
+          "dpId": 24635337
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 102,
+          "isBoosted": true,
+          "wtPrice": 993.68,
+          "seatPrices": "820.0:7,1020.0:6,1150.0:4,1210.0:2",
+          "compRids": "",
+          "compSids": "",
+          "boostDiscPer": 10
+        },
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 820,
+              "discountedPrice": 738,
+              "count": 13
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1150,
+              "discountedPrice": 1035,
+              "count": 6
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 25748,
+        "travelsName": "SST Limoliner",
+        "routeId": 25785094,
+        "busType": "Bharat Benz A/C Sleeper (2+1)",
+        "busTypeId": 1087,
+        "serviceName": "COIMBATORE TO CHENNAI BHARAT BENZ 36",
+        "serviceId": "7",
+        "cancellationPolicy": "0:3:100:0;3:6:95:0;6:12:50:0;12:24:50:0;24:-1:15:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/25748.png",
+        "totalRatings": 4.8,
+        "numberOfReviews": "904",
+        "departureTime": "2026-06-04 21:15:00",
+        "arrivalTime": "2026-06-05 06:40:00",
+        "journeyDurationMin": 565,
+        "firstBpTime": "2026-06-04 21:15:00",
+        "standardBpName": "Omni Bus Stand",
+        "standardBpIdentifier": 70565,
+        "standardDpName": "Koyambedu",
+        "standardDpIdentifier": 66065,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          1299,
+          1399,
+          1799,
+          1899
+        ],
+        "busScore": 4.51,
+        "perzScore": 4.51,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 8,
+        "availableSingleSeats": 5,
+        "availableSeats": 16,
+        "totalSeats": 34,
+        "operatorOfferCampaign": {
+          "Vld": true,
+          "CmpgList": [
+            {
+              "RouteId": 25785094,
+              "CampaignCode": "ALLF_35b25077",
+              "CampaignDesc": "Get INR 50.0 Extra OFF",
+              "CampaignNote": "[\"Minimum ticket fare : INR 65\"]",
+              "CampaignType": "FLAT",
+              "DiscountUnit": 50,
+              "DiscountType": 1,
+              "Discount": 50,
+              "maxDiscount": 50,
+              "DiscountedPrices": [
+                1249,
+                1349,
+                1749,
+                1849
+              ],
+              "OriginalPrices": [
+                1299,
+                1399,
+                1799,
+                1899
+              ],
+              "SeatCount": 16,
+              "isLoggedIn": true,
+              "icon": "DISCOVERY",
+              "displayText": "Try new",
+              "dealType": "DISCOVERY"
+            }
+          ]
+        },
+        "isRescheduled": true,
+        "rescheduleTime": 7,
+        "campaignType": [
+          4,
+          86,
+          15
+        ],
+        "vendorCurrency": "INR",
+        "availableAisleSeats": 6,
+        "availableUpperSeats": 10,
+        "availableLowerSeats": 6,
+        "bpCount": 14,
+        "dpCount": 20,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:17}}",
+        "busVehicleNumber": "TN37EC7070",
+        "manualReschedulePolicy": "7:-1:0:0",
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "7:-1:0:0",
+            "serviceStartTime": "2026-06-04 21:15:00"
+          }
+        ],
+        "busImageCount": -1,
+        "persuasion": {
+          "142": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 142,
+            "percentile": 80,
+            "score": 80
+          },
+          "537": {
+            "priority": 999,
+            "tagCategory": 999,
+            "id": 537
+          }
+        },
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Omni Bus Stand",
+          "destinationDp": "Koyambedu",
+          "bpId": 23752241,
+          "dpId": 23782457
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "3,2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 6,
+          "wtPrice": 1492.75,
+          "seatPrices": "1299.0:7,1399.0:4,1799.0:3,1899.0:2",
+          "compRids": "",
+          "compSids": "",
+          "boostDiscPer": 3.35
+        },
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 1299,
+              "discountedPrice": 1249,
+              "count": 11
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1799,
+              "discountedPrice": 1749,
+              "count": 5
+            }
+          ]
+        }
+      },
+      {
+        "operatorId": 21258,
+        "travelsName": "JB Connect",
+        "routeId": 19393730,
+        "busType": "Bharat Benz A/C Sleeper (2+1)",
+        "busTypeId": 1087,
+        "serviceName": "CBE - CHE 9:00 PM",
+        "serviceId": "SCH588D58N",
+        "cancellationPolicy": "0:6:100:0;6:12:50:0;12:24:25:0;24:-1:15:0",
+        "isPartialCancellationAllowed": true,
+        "operatorLogoPath": "ind/logo/21258.png",
+        "totalRatings": 4.6,
+        "numberOfReviews": "846",
+        "departureTime": "2026-06-04 21:00:00",
+        "arrivalTime": "2026-06-05 06:35:00",
+        "journeyDurationMin": 575,
+        "firstBpTime": "2026-06-04 21:00:00",
+        "standardBpName": "Omni Bus Stand",
+        "standardBpIdentifier": 70565,
+        "standardDpName": "Velachery",
+        "standardDpIdentifier": 68349,
+        "doj": "2026-06-04",
+        "isSeatLayoutAvailable": true,
+        "fareList": [
+          850,
+          899,
+          939,
+          1009,
+          1139
+        ],
+        "busScore": 3.83,
+        "perzScore": 3.83,
+        "isMticketEnabled": true,
+        "isAc": true,
+        "isSleeper": true,
+        "maxSeatsPerTransaction": 6,
+        "availableWindowSeats": 11,
+        "availableSingleSeats": 5,
+        "availableSeats": 22,
+        "totalSeats": 36,
+        "operatorOfferCampaign": {
+          "Vld": true,
+          "CmpgList": [
+            {
+              "RouteId": 19393730,
+              "CampaignCode": "ALLF_b74451c8",
+              "CampaignDesc": "Get 11 % Extra OFF",
+              "CampaignNote": "[\"Minimum ticket fare : INR 800\",\"Maximum discount limit : INR 99999\"]",
+              "CampaignType": "PERCENT",
+              "DiscountUnit": 10,
+              "DiscountType": 2,
+              "Discount": 85,
+              "maxDiscount": 10.01,
+              "DiscountedPrices": [
+                765,
+                809,
+                845,
+                908,
+                1025
+              ],
+              "OriginalPrices": [
+                850,
+                899,
+                939,
+                1009,
+                1139
+              ],
+              "SeatCount": 22,
+              "isLoggedIn": true,
+              "icon": "DISCOVERY",
+              "displayText": "Try new",
+              "dealType": "DISCOVERY"
+            }
+          ]
+        },
+        "isRescheduled": true,
+        "rescheduleTime": 8,
+        "campaignType": [
+          4,
+          86,
+          15
+        ],
+        "vendorCurrency": "INR",
+        "availableAisleSeats": 9,
+        "availableUpperSeats": 14,
+        "availableLowerSeats": 8,
+        "bpCount": 16,
+        "dpCount": 24,
+        "eligibleNudges": "{0:{login:0}, 1:{sProof:6}}",
+        "busVehicleNumber": "TN30CJ7997",
+        "boReqParams": [
+          {
+            "isAvailReschedule": true,
+            "reschedulePolicy": "8:-1:0:0",
+            "serviceStartTime": "2026-06-04 21:00:00"
+          }
+        ],
+        "busImageCount": -1,
+        "locationSearchParams": {
+          "isExactMatch": true,
+          "sourceBp": "Saravanampatti",
+          "destinationDp": "Kauvery Hospital",
+          "bpId": 25533220,
+          "dpId": 25533533
+        },
+        "serviceNotes": {
+          "PETS": "1",
+          "CHILD": "1",
+          "LUG": "2,1"
+        },
+        "rdBoostInfo": {
+          "preBoostPos": 22,
+          "isBoosted": true,
+          "wtPrice": 931.95,
+          "seatPrices": "850.0:5,899.0:8,939.0:4,1009.0:3,1139.0:2",
+          "compRids": "",
+          "compSids": "",
+          "boostDiscPer": 10
+        },
+        "fareDetailsBySeatType": {
+          "SLEEPER": [
+            {
+              "originalPrice": 850,
+              "discountedPrice": 765,
+              "count": 17
+            }
+          ],
+          "SINGLE_SLEEPER": [
+            {
+              "originalPrice": 1009,
+              "discountedPrice": 908,
+              "count": 5
+            }
+          ]
+        }
+      }
+    ],
+    "parentSrcCityName": "Coimbatore",
+    "parentDstCityName": "Chennai",
+    "parentSrcCityId": 141,
+    "parentDstCityId": 123,
+    "srcCountry": "INDIA",
+    "dstCountry": "INDIA",
+    "sortLabel": "BUSSCORE",
+    "uuidAtSRP": "609602b424c34d87940b958d836b6b25",
+    "busCounts": {
+      "total": 168,
+      "privateCount": 167
+    },
+    "operatorValidations": {
+      "28011": {
+        "offer": "Use Code <b>KSRTC</b> to Get Upto <b>\u20b9300</b> off on <b>KSRTC!</b>",
+        "iconUrl": "https://st.redbus.in/buslogos/country/ind/logo_group/19393.png"
+      }
+    },
+    "trainData": {
+      "sourceStationCode": "CBE",
+      "avlTrnCount": 1,
+      "dstStationName": "Mgr Chennai Ctl",
+      "errorMessage": null,
+      "dstStationCode": "MAS",
+      "sourceStationName": "Coimbatore Jn"
+    },
+    "srcRegion": "Tamil Nadu",
+    "desRegion": "Tamil Nadu",
+    "tupleBoOffers": {
+      "23971": {
+        "offerCode": "NUEGO10",
+        "offerDiscount": 10,
+        "offerDiscountType": 2
+      }
+    }
+  },
+  "statusCode": 200,
+  "headers": {
+    "date": "Thu, 04 Jun 2026 05:50:45 GMT",
+    "content-type": "application/json",
+    "transfer-encoding": "chunked",
+    "connection": "keep-alive",
+    "server": "nginx",
+    "access-control-allow-origin": "https://www.redbus.in",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "Content-Type, Authorization",
+    "access-control-allow-credentials": "true"
+  }
+}

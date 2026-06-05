@@ -1,80 +1,10 @@
-"""
-scrapers.py — BusBot RedBus Scraper
-════════════════════════════════════════════════════════════
-STRATEGY:
-  STEP 1 → Playwright headless Chromium (primary, 15s timeout)
-  STEP 2 → ScraperAPI HTTP fallback (render=true, premium)
-  STEP 3 → Dynamic static fallback with popular operators
-
-Result schema matches the defined contract:
-  operator, bus_type, departure, arrival, duration,
-  price, currency, seats_available, rating, total_reviews,
-  boarding_points, dropping_points, amenities,
-  live_tracking, cancellation
-════════════════════════════════════════════════════════════
-"""
-
-import asyncio
-import sys
-import io
-import json
 import re
-import os
-import random
-import uuid
-from datetime import datetime
 
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
-from playwright_stealth import Stealth
-import httpx
-from bs4 import BeautifulSoup
+with open("scrapers.py", "r", encoding="utf-8") as f:
+    content = f.read()
 
-# ── UTF-8 stdout on Windows ──────────────────────────────
-if sys.stdout.encoding != "utf-8":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-if sys.stderr.encoding != "utf-8":
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-
-
-# ════════════════════════════════════════════════════════════
-# Config
-# ════════════════════════════════════════════════════════════
-SCRAPERAPI_KEY  = os.getenv("SCRAPERAPI_KEY", "")
-SCRAPERAPI_BASE = "https://api.scraperapi.com/"
-PLAYWRIGHT_TIMEOUT_MS = 20_000   # 20 s page load limit
-PLAYWRIGHT_WAIT_MS    = 6_000    # extra settle time
-
-MONTH_NAMES = {
-    "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
-    "05": "May", "06": "Jun", "07": "Jul", "08": "Aug",
-    "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
-}
-
-# Popular operators used in the smart static fallback (STEP 3)
-POPULAR_OPERATORS_BY_REGION = {
-    "south": ["SRS Travels", "Orange Travels", "KPN Travels", "Parveen Travels",
-              "VRL Travels", "TNSTC", "KSRTC", "IntrCity SmartBus", "Zingbus", "NueGo"],
-    "north": ["Raj National Express", "Shrinath Travels", "Hans Travels",
-              "Neeta Tours", "IntrCity SmartBus", "Zingbus", "NueGo"],
-    "west":  ["Neeta Tours", "National Travels", "Eagle Travels",
-              "IntrCity SmartBus", "Zingbus", "NueGo"],
-    "default": ["IntrCity SmartBus", "Zingbus", "NueGo EV", "SRS Travels",
-                "VRL Travels", "Orange Travels", "KPN Travels"],
-}
-
-SOUTH_CITIES = {"chennai", "coimbatore", "madurai", "bangalore", "bengaluru",
-                "hyderabad", "kochi", "mysore", "trichy", "ooty", "kodaikanal",
-                "rameswaram", "tirunelveli", "vellore", "pondicherry"}
-
-# ── Minimal BUS_FALLBACK kept for backward compat with main.py ──
-BUS_FALLBACK = [
-    {"operator": "IntrCity SmartBus", "departure": "22:00", "price": "₹850", "type": "AC Sleeper"},
-    {"operator": "Zingbus",           "departure": "23:15", "price": "₹950", "type": "AC Seater"},
-    {"operator": "NueGo EV",          "departure": "20:00", "price": "₹750", "type": "Non-AC Seater"},
-]
-
-
-# ════════════════════════════════════════════════════════════
+# Replace Date helpers
+date_helpers = """# ════════════════════════════════════════════════════════════
 # Date helpers
 # ════════════════════════════════════════════════════════════
 def resolve_date(date_str: str):
@@ -102,87 +32,21 @@ def format_date_for_redbus(date_str: str) -> str:
 def format_date_for_abhibus(date_str: str) -> str:
     d = resolve_date(date_str)
     return f"{d.day:02d}-{d.month:02d}-{d.year}"
+"""
+content = re.sub(
+    r"# ════════════════════════════════════════════════════════════\n# Date helpers\n# ════════════════════════════════════════════════════════════.*?def build_redbus_url[^\n]*\n.*?\)\n",
+    date_helpers,
+    content,
+    flags=re.DOTALL
+)
 
-
-# ════════════════════════════════════════════════════════════
-# Amenity enrichment helper
-# ════════════════════════════════════════════════════════════
-def _enrich_amenities(bus_type: str, operator: str = "") -> dict:
-    """Derive realistic amenity flags from bus type string."""
-    t = (bus_type + " " + operator).lower()
-    is_ac      = "ac" in t and "non" not in t
-    is_sleeper = "sleep" in t
-    is_volvo   = "volvo" in t or "multi-axle" in t
-    return {
-        "wifi":          is_volvo or random.random() < 0.25,
-        "charging":      is_ac or random.random() < 0.5,
-        "sleeper":       is_sleeper,
-        "ac":            is_ac,
-        "live_tracking": random.random() < 0.7,
-        "water_bottle":  is_ac and random.random() < 0.4,
-        "blanket":       is_sleeper and is_ac,
-        "reading_light": is_sleeper,
-    }
-
-
-def _amenity_list(amenity_dict: dict) -> list:
-    label_map = {
-        "wifi": "WiFi", "charging": "Charging Points", "sleeper": "Sleeper Berths",
-        "ac": "Air Conditioning", "live_tracking": "Live Tracking",
-        "water_bottle": "Water Bottle", "blanket": "Blanket", "reading_light": "Reading Light",
-    }
-    return [label_map[k] for k, v in amenity_dict.items() if v]
-
-
-def _normalise_result(r: dict, source_tag: str = "playwright") -> dict:
-    """Ensure every result conforms to the full schema contract."""
-    amenities_raw = r.get("amenities", {})
-    if isinstance(amenities_raw, dict):
-        amenity_dict = amenities_raw
-    else:
-        bus_type  = r.get("type", r.get("bus_type", ""))
-        operator  = r.get("operator", "")
-        amenity_dict = _enrich_amenities(bus_type, operator)
-
-    price_raw = r.get("price", r.get("fare", "--"))
-    # Normalise price to plain integer if possible
-    try:
-        price_int = int(re.sub(r"[^\d]", "", str(price_raw)))
-    except Exception:
-        price_int = 0
-
-    return {
-        "id":               r.get("id", f"bus_{uuid.uuid4().hex[:6]}"),
-        "operator":         r.get("operator", "Unknown Operator"),
-        "bus_type":         r.get("bus_type", r.get("type", "--")),
-        # Keep legacy 'type' key so existing frontend code doesn't break
-        "type":             r.get("bus_type", r.get("type", "--")),
-        "departure":        r.get("departure", "--"),
-        "arrival":          r.get("arrival", "--"),
-        "duration":         r.get("duration", "--"),
-        "price":            f"₹{price_int:,}" if price_int else price_raw,
-        "currency":         "INR",
-        "seats_available":  r.get("seats_available", r.get("seats", "--")),
-        "seats":            r.get("seats_available", r.get("seats", "--")),
-        "rating":           r.get("rating", round(random.uniform(3.5, 4.8), 1)),
-        "total_reviews":    r.get("total_reviews", random.randint(200, 2500)),
-        "boarding_points":  r.get("boarding_points", []),
-        "dropping_points":  r.get("dropping_points", []),
-        "amenities":        amenity_dict,
-        "amenity_list":     _amenity_list(amenity_dict),
-        "live_tracking":    amenity_dict.get("live_tracking", False),
-        "cancellation":     r.get("cancellation", "Free cancellation before 24 hrs"),
-        "source":           r.get("source", source_tag),
-    }
-
-
-# ════════════════════════════════════════════════════════════
+# Replace everything from STEP 1 onwards
+scraping_logic = """# ════════════════════════════════════════════════════════════
 # STEP 1 — Playwright RedBus
 # ════════════════════════════════════════════════════════════
 async def _scrape_redbus(from_city: str, to_city: str, date: str) -> list:
-    from real_bus_data import get_redbus_slug
-    from_slug = get_redbus_slug(from_city)
-    to_slug = get_redbus_slug(to_city)
+    from_slug = from_city.lower().replace(" ", "-")
+    to_slug = to_city.lower().replace(" ", "-")
     date_str = format_date_for_redbus(date)
     url = f"https://www.redbus.in/bus-tickets/{from_slug}-to-{to_slug}?doj={date_str}"
     
@@ -422,3 +286,16 @@ if __name__ == "__main__":
                 print()
 
     asyncio.run(_test())
+"""
+
+content = re.sub(
+    r"# ════════════════════════════════════════════════════════════\n# STEP 1 — Playwright \(primary, headless Chromium\)\n# ════════════════════════════════════════════════════════════.*",
+    scraping_logic,
+    content,
+    flags=re.DOTALL
+)
+
+with open("scrapers.py", "w", encoding="utf-8") as f:
+    f.write(content)
+
+print("Patch applied to scrapers.py")

@@ -1,0 +1,12 @@
+{
+  "results": {
+    "meta-llama/llama-3.1-8b-instruct:free": "\u274c FAILED: Error code: 404 - {'error': {'message': 'No endpoints found for meta-llama/llama-3.1-8b-instruct:free.', 'code': 404}, 'user_id': 'user_3B7osWhsN4WvoOHuFnwSAkM1S7G'}",
+    "meta-llama/llama-3.3-70b-instruct:free": "\u274c FAILED: Error code: 429 - {'error': {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'meta-llama/llama-3.3-70b-instruct:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False, 'retry_after_seconds': 29, 'retry_after_seconds_raw': 28.371, 'headers': {'Retry-After': '29'}}}, 'user_id': 'user_3B7osWhsN4WvoOHuFnwSAkM1S7G'}",
+    "google/gemma-3-12b-it:free": "\u274c FAILED: Error code: 404 - {'error': {'message': 'No endpoints found for google/gemma-3-12b-it:free.', 'code': 404}, 'user_id': 'user_3B7osWhsN4WvoOHuFnwSAkM1S7G'}",
+    "mistralai/mistral-7b-instruct:free": "\u274c FAILED: Error code: 404 - {'error': {'message': 'No endpoints found for mistralai/mistral-7b-instruct:free.', 'code': 404}, 'user_id': 'user_3B7osWhsN4WvoOHuFnwSAkM1S7G'}",
+    "qwen/qwen-2.5-7b-instruct:free": "\u274c FAILED: Error code: 404 - {'error': {'message': 'No endpoints found for qwen/qwen-2.5-7b-instruct:free.', 'code': 404}, 'user_id': 'user_3B7osWhsN4WvoOHuFnwSAkM1S7G'}"
+  },
+  "working_count": 0,
+  "working_models": [],
+  "recommendation": "All models down"
+}
