@@ -1,0 +1,33 @@
+services:
+  # ── Backend (FastAPI) ─────────────────────────────────────
+  - type: web
+    name: busbot-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SCRAPERAPI_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+  # ── Frontend (Vite React) ────────────────────────────────
+  - type: web
+    name: busbot-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    rootDir: frontend
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: busbot-backend
+          type: web
+          property: host
+          envVarKey: RENDER_EXTERNAL_URL

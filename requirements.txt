@@ -1,8 +1,6 @@
 fastapi
 uvicorn[standard]
 httpx
-playwright
-playwright-stealth
 pydantic
 python-dotenv
 beautifulsoup4

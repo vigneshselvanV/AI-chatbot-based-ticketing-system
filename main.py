@@ -11,8 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
-from real_bus_data import scrape_bus
-from scrapers import BUS_FALLBACK, scrape_bus as _unused_scrape_bus
+from scrapers import scrape_bus, BUS_FALLBACK
 
 # ═══════════════════════════════════════════
 # Known Connecting Routes (for smart suggestions)
