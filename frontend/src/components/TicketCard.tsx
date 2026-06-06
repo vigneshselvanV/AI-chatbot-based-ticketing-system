@@ -84,7 +84,11 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   if (amenitiesList.length === 0) amenitiesList.push("Standard");
 
   // Format price if it's not a number
-  const formattedPrice = ticket.price?.toString().replace(/\D/g, '') || '0';
+  const formattedPrice = ticket.price?.toString().replace(/\D/g, '');
+  const parsedPrice = parseInt(formattedPrice || '0');
+  const displayPrice = isNaN(parsedPrice) || parsedPrice === 0 
+    ? (ticket.price && ticket.price !== '--' ? ticket.price : 'N/A')
+    : `₹${parsedPrice.toLocaleString('en-IN')}`;
 
   return (
     <div className="bus-card">
@@ -121,7 +125,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
             </div>
           )}
           <div className="price-amount">
-            ₹{parseInt(formattedPrice).toLocaleString('en-IN') || 'N/A'}
+            {displayPrice}
           </div>
           <div className="price-label">per person</div>
         </div>
