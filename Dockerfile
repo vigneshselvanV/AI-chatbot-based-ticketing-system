@@ -1,5 +1,5 @@
-# Use the official Python image
-FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
+# Use a lightweight Python image
+FROM python:3.11-slim
 
 # Set the working directory
 WORKDIR /app
@@ -10,14 +10,11 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Explicitly install Playwright chromium browser to ensure no version mismatch
-RUN playwright install chromium
-
 # Copy the rest of the application
 COPY . .
 
 # Expose the port FastAPI runs on
 EXPOSE 8000
 
-# Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run the application (using Render's PORT environment variable)
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
