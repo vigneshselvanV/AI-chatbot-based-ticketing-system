@@ -151,9 +151,11 @@ def _find_by_prefix(soup: BeautifulSoup, prefix: str) -> list:
 
 
 # ── RedBus scraper ────────────────────────────────────────────
+from real_bus_data import get_redbus_slug
+
 async def _scrape_redbus(from_city: str, to_city: str, date: str) -> list:
-    from_slug = from_city.lower().replace(" ", "-")
-    to_slug   = to_city.lower().replace(" ", "-")
+    from_slug = get_redbus_slug(from_city)
+    to_slug   = get_redbus_slug(to_city)
     date_str  = format_date_redbus(date)
     target    = f"https://www.redbus.in/bus-tickets/{from_slug}-to-{to_slug}?doj={date_str}"
     print(f"[REDBUS] ScraperAPI → {target}")
@@ -257,9 +259,11 @@ def _redbus_fallback_parse(soup: BeautifulSoup, target: str) -> list:
 
 
 # ── AbhiBus scraper ───────────────────────────────────────────
+from real_bus_data import get_redbus_slug
+
 async def _scrape_abhibus(from_city: str, to_city: str, date: str) -> list:
-    from_slug = from_city.lower().replace(" ", "-")
-    to_slug   = to_city.lower().replace(" ", "-")
+    from_slug = get_redbus_slug(from_city)
+    to_slug   = get_redbus_slug(to_city)
     date_str  = format_date_abhibus(date)
     target    = f"https://www.abhibus.com/bus/{from_slug}-to-{to_slug}/{date_str}"
     print(f"[ABHIBUS] ScraperAPI → {target}")
@@ -316,11 +320,13 @@ async def _scrape_abhibus(from_city: str, to_city: str, date: str) -> list:
 
 
 # ── Static fallback ───────────────────────────────────────────
+from real_bus_data import get_redbus_slug
+
 def get_static_fallback(from_city: str, to_city: str, date: str) -> dict:
     redbus_date  = format_date_redbus(date)
     abhibus_date = format_date_abhibus(date)
-    f = from_city.lower().replace(" ", "-")
-    t = to_city.lower().replace(" ", "-")
+    f = get_redbus_slug(from_city)
+    t = get_redbus_slug(to_city)
     return {
         "is_fallback": True,
         "message": "Live data unavailable right now. Check directly on these sites:",
