@@ -84,7 +84,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   if (amenitiesList.length === 0) amenitiesList.push("Standard");
 
   // Format price if it's not a number
-  const formattedPrice = ticket.price?.toString().replace(/\\D/g, '') || '0';
+  const formattedPrice = ticket.price?.toString().replace(/\D/g, '') || '0';
 
   return (
     <div className="bus-card">
