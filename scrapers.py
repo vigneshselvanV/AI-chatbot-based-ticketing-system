@@ -82,6 +82,232 @@ def format_date_abhibus(date_str: str) -> str:
     d = resolve_date(date_str)
     return f"{d.day:02d}-{d.month:02d}-{d.year}"
 
+# ── City Slug Map ─────────────────────────────────────────────
+CITY_SLUG_MAP = {
+    # Tamil Nadu
+    "chennai": "chennai",
+    "madras": "chennai",
+    "madurai": "madurai",
+    "coimbatore": "coimbatore",
+    "trichy": "tiruchirappalli",
+    "trichy-tiruchirappalli": "tiruchirappalli",
+    "tiruchirappalli": "tiruchirappalli",
+    "tiruchirapalli": "tiruchirappalli",
+    "tiruchy": "tiruchirappalli",
+    "salem": "salem",
+    "erode": "erode",
+    "tirunelveli": "tirunelveli",
+    "nellai": "tirunelveli",
+    "thoothukudi": "thoothukudi",
+    "tuticorin": "thoothukudi",
+    "vellore": "vellore",
+    "kanchipuram": "kanchipuram",
+    "kumbakonam": "kumbakonam",
+    "thanjavur": "thanjavur",
+    "tanjore": "thanjavur",
+    "rameswaram": "rameswaram",
+    "rameshwaram": "rameswaram",
+    "kodaikanal": "kodaikanal",
+    "kodai": "kodaikanal",
+    "ooty": "ooty",
+    "udagamandalam": "ooty",
+    "udhagamandalam": "ooty",
+    "theni": "theni",
+    "dindigul": "dindigul",
+    "nagercoil": "nagercoil",
+    "nagarcoil": "nagercoil",
+    "kanyakumari": "kanyakumari",
+    "cape comorin": "kanyakumari",
+    "pondicherry": "pondicherry",
+    "puducherry": "pondicherry",
+    "pudukkottai": "pudukkottai",
+    "namakkal": "namakkal",
+    "dharmapuri": "dharmapuri",
+    "krishnagiri": "krishnagiri",
+    "cuddalore": "cuddalore",
+    "nagapattinam": "nagapattinam",
+    "sivaganga": "sivaganga",
+    "ramanathapuram": "ramanathapuram",
+    "virudhunagar": "virudhunagar",
+    "tiruppur": "tiruppur",
+    "karur": "karur",
+    "perambalur": "perambalur",
+    "ariyalur": "ariyalur",
+    "chidambaram": "chidambaram",
+    "villupuram": "villupuram",
+    "tindivanam": "tindivanam",
+    "hosur": "hosur",
+    "ambur": "ambur",
+    "vellore": "vellore",
+    "ranipet": "ranipet",
+    "tiruvannamalai": "tiruvannamalai",
+    "tiruvannamalai": "tiruvannamalai",
+    "kallakurichi": "kallakurichi",
+    "tenkasi": "tenkasi",
+    "sattur": "sattur",
+    "sivakasi": "sivakasi",
+    "paramakudi": "paramakudi",
+    "karaikudi": "karaikudi",
+    "musiri": "musiri",
+    "palani": "palani",
+    "pollachi": "pollachi",
+    "valparai": "valparai",
+    "mettupalayam": "mettupalayam",
+    "gudalur": "gudalur",
+    "coonoor": "coonoor",
+    "yercaud": "yercaud",
+    "kotagiri": "kotagiri",
+    "tambaram": "tambaram",
+    "avadi": "avadi",
+    "ambattur": "ambattur",
+    "tiruvallur": "tiruvallur",
+    "mahabalipuram": "mahabalipuram",
+    "mamallapuram": "mahabalipuram",
+    "velankanni": "velankanni",
+    "pattukottai": "pattukottai",
+
+    # Karnataka
+    "bangalore": "bengaluru",
+    "bengaluru": "bengaluru",
+    "bengalore": "bengaluru",
+    "mysore": "mysuru",
+    "mysuru": "mysuru",
+    "hubli": "hubballi",
+    "hubballi": "hubballi",
+    "dharwad": "dharwad",
+    "mangalore": "mangaluru",
+    "mangaluru": "mangaluru",
+    "shimoga": "shivamogga",
+    "shivamogga": "shivamogga",
+    "belgaum": "belagavi",
+    "belagavi": "belagavi",
+    "bellary": "ballari",
+    "ballari": "ballari",
+    "tumkur": "tumakuru",
+    "tumakuru": "tumakuru",
+    "hassan": "hassan",
+    "mandya": "mandya",
+    "chikmagalur": "chikkamagaluru",
+    "chikkamagaluru": "chikkamagaluru",
+    "udupi": "udupi",
+    "gulbarga": "kalaburagi",
+    "kalaburagi": "kalaburagi",
+    "bidar": "bidar",
+    "hospet": "hospet",
+    "hampi": "hampi",
+    "bagalkot": "bagalkot",
+    "bijapur": "vijayapura",
+    "vijayapura": "vijayapura",
+    "raichur": "raichur",
+    "koppal": "koppal",
+    "gadag": "gadag",
+    "haveri": "haveri",
+    "davanagere": "davanagere",
+    "davangere": "davanagere",
+    "chitradurga": "chitradurga",
+    "kolar": "kolar",
+    "bangalore airport": "bengaluru",
+    "yelahanka": "bengaluru",
+
+    # Kerala
+    "thiruvananthapuram": "thiruvananthapuram",
+    "trivandrum": "thiruvananthapuram",
+    "kochi": "kochi",
+    "cochin": "kochi",
+    "ernakulam": "kochi",
+    "kozhikode": "kozhikode",
+    "calicut": "kozhikode",
+    "thrissur": "thrissur",
+    "trichur": "thrissur",
+    "kollam": "kollam",
+    "quilon": "kollam",
+    "kottayam": "kottayam",
+    "palakkad": "palakkad",
+    "palghat": "palakkad",
+    "alappuzha": "alappuzha",
+    "alleppey": "alappuzha",
+    "kannur": "kannur",
+    "cannanore": "kannur",
+    "malappuram": "malappuram",
+    "kasaragod": "kasaragod",
+    "idukki": "idukki",
+    "munnar": "munnar",
+    "thekkady": "thekkady",
+    "periyar": "thekkady",
+    "wayanad": "wayanad",
+    "varkala": "varkala",
+    "kovalam": "thiruvananthapuram",
+
+    # Andhra Pradesh & Telangana
+    "hyderabad": "hyderabad",
+    "secunderabad": "hyderabad",
+    "vijayawada": "vijayawada",
+    "visakhapatnam": "visakhapatnam",
+    "vizag": "visakhapatnam",
+    "tirupati": "tirupati",
+    "guntur": "guntur",
+    "nellore": "nellore",
+    "warangal": "warangal",
+    "karimnagar": "karimnagar",
+    "rajahmundry": "rajahmundry",
+    "kakinada": "kakinada",
+    "kurnool": "kurnool",
+    "ongole": "ongole",
+    "anantapur": "anantapur",
+    "kadapa": "kadapa",
+    "cuddapah": "kadapa",
+    "nizamabad": "nizamabad",
+    "khammam": "khammam",
+    "nalgonda": "nalgonda",
+
+    # Other major cities
+    "mumbai": "mumbai",
+    "bombay": "mumbai",
+    "pune": "pune",
+    "nagpur": "nagpur",
+    "delhi": "delhi",
+    "new delhi": "delhi",
+    "kolkata": "kolkata",
+    "calcutta": "kolkata",
+    "ahmedabad": "ahmedabad",
+    "surat": "surat",
+    "jaipur": "jaipur",
+    "lucknow": "lucknow",
+    "kanpur": "kanpur",
+    "bhopal": "bhopal",
+    "indore": "indore",
+    "patna": "patna",
+    "guwahati": "guwahati",
+    "bhubaneswar": "bhubaneswar",
+    "raipur": "raipur",
+    "chandigarh": "chandigarh",
+    "dehradun": "dehradun",
+    "shimla": "shimla",
+    "goa": "goa",
+    "panaji": "goa",
+    "madgaon": "goa",
+    "margao": "goa",
+    "coorg": "madikeri",
+    "madikeri": "madikeri",
+}
+
+def get_redbus_slug(city: str) -> str:
+    """Convert any city name/alias to the correct RedBus URL slug."""
+    city_lower = city.lower().strip()
+    # Direct lookup
+    if city_lower in CITY_SLUG_MAP:
+        return CITY_SLUG_MAP[city_lower]
+    # Partial match — find if any key is contained in city_lower
+    for key, slug in CITY_SLUG_MAP.items():
+        if key in city_lower or city_lower in key:
+            return slug
+    # Fallback: use the city name itself (lowercase, spaces replaced with hyphens)
+    return city_lower.replace(" ", "-")
+
+
+
+
+
 
 # ── Amenity enrichment ────────────────────────────────────────
 def _enrich_amenities(bus_type: str, operator: str = "") -> dict:
@@ -151,7 +377,6 @@ def _find_by_prefix(soup: BeautifulSoup, prefix: str) -> list:
 
 
 # ── RedBus scraper ────────────────────────────────────────────
-from real_bus_data import get_redbus_slug
 
 async def _scrape_redbus(from_city: str, to_city: str, date: str) -> list:
     from_slug = get_redbus_slug(from_city)
@@ -259,7 +484,6 @@ def _redbus_fallback_parse(soup: BeautifulSoup, target: str) -> list:
 
 
 # ── AbhiBus scraper ───────────────────────────────────────────
-from real_bus_data import get_redbus_slug
 
 async def _scrape_abhibus(from_city: str, to_city: str, date: str) -> list:
     from_slug = get_redbus_slug(from_city)
@@ -320,7 +544,6 @@ async def _scrape_abhibus(from_city: str, to_city: str, date: str) -> list:
 
 
 # ── Static fallback ───────────────────────────────────────────
-from real_bus_data import get_redbus_slug
 
 def get_static_fallback(from_city: str, to_city: str, date: str) -> dict:
     redbus_date  = format_date_redbus(date)
