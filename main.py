@@ -13,6 +13,9 @@ from pydantic import BaseModel
 import httpx
 from scrapers import scrape_bus, BUS_FALLBACK
 
+import dotenv
+dotenv.load_dotenv()
+
 # ═══════════════════════════════════════════
 # Known Connecting Routes (for smart suggestions)
 # ═══════════════════════════════════════════
